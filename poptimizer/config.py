@@ -31,4 +31,4 @@ PORT_PATH = pathlib.Path(__file__).parents[1] / "portfolio"
 YEAR_IN_TRADING_DAYS = 12 * 21
 
 # Максимальный объем одной торговой операции в долях портфеля
-MAX_TRADE = 1 / 100
+MAX_TRADE = 5 / 100

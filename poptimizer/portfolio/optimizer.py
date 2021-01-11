@@ -13,7 +13,7 @@ from poptimizer.portfolio import metrics
 from poptimizer.portfolio.portfolio import Portfolio, CASH, PORTFOLIO
 
 # На сколько сделок разбивается операция по покупке/продаже акций
-TRADES = 5
+TRADES = 1
 # Значимость отклонения градиента от нуля
 P_VALUE = 0.05
 
@@ -163,4 +163,4 @@ class Optimizer:
         rez["Q_BUY"] = 0
         rez["Q_BUY"] = rez["BUY"].apply(lambda ticker: buy_size[ticker])
 
-        return rez[["SELL", "Q_SELL", "BUY", "Q_BUY", "GRAD_DIFF", "TURNOVER", "P_VALUE"]]
+        return rez[["SELL", "Q_SELL", "BUY", "Q_BUY", "GRAD_DIFF", "TURNOVER", "P_VALUE"]].sort_values('P_VALUE')
