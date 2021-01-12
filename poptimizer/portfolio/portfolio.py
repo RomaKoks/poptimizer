@@ -2,6 +2,7 @@
 import collections
 import functools
 from typing import Dict, Optional, Union, NoReturn
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -15,16 +16,17 @@ from poptimizer.store import database
 
 CASH = "CASH"
 PORTFOLIO = "PORTFOLIO"
-TURNOVER_DAYS = database.MONGO_CLIENT["data"]["models"].find_one(
+MAX_HISTORY = database.MONGO_CLIENT["data"]["models"].find_one(
     {},
     projection={"_id": False, "genotype.Data.history_days": True},
     sort=[("genotype.Data.history_days", -1)],
 )
 try:
-    TURNOVER_DAYS = TURNOVER_DAYS["genotype"]["Data"]["history_days"]
-    TURNOVER_DAYS = (int(TURNOVER_DAYS) + data_params.FORECAST_DAYS * 2) * 2
+    MAX_HISTORY = int(MAX_HISTORY["genotype"]["Data"]["history_days"])
+    ADD_DAYS = (MAX_HISTORY + data_params.FORECAST_DAYS * 2) * 2
 except TypeError:
-    TURNOVER_DAYS = int(1 / config.MAX_TRADE)
+    MAX_HISTORY = int(1 / config.MAX_TRADE)
+    ADD_DAYS = int(1 / config.MAX_TRADE)
 
 
 class Portfolio:
@@ -83,7 +85,8 @@ class Portfolio:
         ]
         df = pd.concat(columns, axis="columns")
         df = df.loc[df['VALUE'] > 0]
-        df.sort_values('VALUE', ascending=False, inplace=True)
+        df.sort_values('VALUE', inplace=True, ascending=False)
+        df.to_excel(f'portfolio/reports/summary_{str(datetime.today())[:10]}.xlsx')
         return df
 
     def _positions_stats(self) -> str:
@@ -100,7 +103,7 @@ class Portfolio:
 
     def _least_liquid_pos(self) -> str:
         """Наименее ликвидная позиция по соотношению размера и дневного оборота."""
-        result = self.value / self._median_turnover(tuple(self.index[:-2]))
+        result = self.value / self._median_turnover(tuple(self.index[:-2]), MAX_HISTORY)
         return f"НАИМЕНЕЕ ЛИКВИДНАЯ ПОЗИЦИЯ:\n{result.idxmax()} - {result.max():.0%}"
 
     @property
@@ -179,7 +182,7 @@ class Portfolio:
     @property
     def turnover_factor(self) -> pd.Series:
         """Понижающий коэффициент для акций с малым объемом оборотов относительно открытой позиции."""
-        last_turnover = self._median_turnover(tuple(self.index[:-2]))
+        last_turnover = self._median_turnover(tuple(self.index[:-2]), MAX_HISTORY)
         result = (self.value / last_turnover).reindex(self.index)
         last_turnover = last_turnover * result.max() - self.value
         result = last_turnover / (self.value[PORTFOLIO] * MAX_TRADE)
@@ -190,17 +193,17 @@ class Portfolio:
         result.name = "TURNOVER"
         return result
 
-    def _median_turnover(self, tickers) -> pd.Series:
+    def _median_turnover(self, tickers, days) -> pd.Series:
         """Медианный оборот за несколько последних дней."""
         last_turnover = moex.turnovers(tickers, self.date)
-        last_turnover = last_turnover.iloc[-TURNOVER_DAYS:]
+        last_turnover = last_turnover.iloc[-days:]
         last_turnover = last_turnover.median(axis=0)
         return last_turnover
 
     def add_tickers(self) -> NoReturn:
         """Претенденты для добавления."""
         all_tickers = moex.securities()
-        last_turnover = self._median_turnover(tuple(all_tickers))
+        last_turnover = self._median_turnover(tuple(all_tickers), ADD_DAYS)
         minimal_turnover = self.value[PORTFOLIO] * MAX_TRADE
         last_turnover = last_turnover[last_turnover.gt(minimal_turnover)]
 
@@ -208,7 +211,19 @@ class Portfolio:
         last_turnover = last_turnover.reindex(index)
         last_turnover = last_turnover.sort_values(ascending=False).astype("int")
 
-        print(f"\nДЛЯ ДОБАВЛЕНИЯ\n\n{last_turnover}")
+        returns_new = self.norm_ret(tuple(index))
+        returns_old = self.norm_ret(tuple(self.index[:-2]))
+        corr_max = (returns_new.T @ returns_old / MAX_HISTORY).max(axis=1).sort_values()
+
+        print(f"\nДЛЯ ДОБАВЛЕНИЯ\n\n{last_turnover}\n{corr_max}")
+
+    def norm_ret(self, tickers):
+        div, p1 = moex.div_and_prices(tickers, self.date)
+        p0 = p1.shift(1)
+        returns_new = (p1 + div) / p0
+        returns_new = returns_new.iloc[-MAX_HISTORY:]
+        returns_new = (returns_new - returns_new.mean(axis=0)) / returns_new.std(axis=0, ddof=0)
+        return returns_new
 
 
 def load_from_yaml(date: Union[str, pd.Timestamp]) -> Portfolio:

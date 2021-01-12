@@ -2,7 +2,7 @@
 import itertools
 import math
 from typing import Tuple
-
+from datetime import datetime
 import pandas as pd
 from scipy import stats
 
@@ -18,7 +18,7 @@ TRADES = 1
 P_VALUE = 0.05
 
 # Издержки в годовом выражении для двух операций
-COSTS = (config.YEAR_IN_TRADING_DAYS * 2 / FORECAST_DAYS) * (0.025 / 100) * (0.75 + 0.0)
+COSTS = (config.YEAR_IN_TRADING_DAYS * 2 / FORECAST_DAYS) * (0.025 / 100)
 
 
 class Optimizer:
@@ -97,8 +97,11 @@ class Optimizer:
         rez = self._wilcoxon_tests()
 
         rez = pd.DataFrame(list(rez), columns=["SELL", "BUY", "GRAD_DIFF", "TURNOVER", "P_VALUE"])
-        rez["SORT"] = rez["GRAD_DIFF"] * rez["TURNOVER"]
-        rez = rez.sort_values("SORT", ascending=False).drop_duplicates(subset="SELL")
+        rez["SORT"] = (pd.qcut(rez["GRAD_DIFF"], min(rez.shape[0], 10), labels=False) + 1) \
+                      * (pd.qcut(rez["TURNOVER"], min(rez.shape[0], 3), labels=False) + 1) \
+                      / (pd.qcut(rez['P_VALUE'], min(rez.shape[0], 5), labels=False) + 1)
+
+        rez = rez.sort_values("SORT", ascending=False)
         rez.drop("SORT", axis=1)
         rez.index = pd.RangeIndex(start=1, stop=len(rez) + 1)
 
@@ -163,4 +166,26 @@ class Optimizer:
         rez["Q_BUY"] = 0
         rez["Q_BUY"] = rez["BUY"].apply(lambda ticker: buy_size[ticker])
 
-        return rez[["SELL", "Q_SELL", "BUY", "Q_BUY", "GRAD_DIFF", "TURNOVER", "P_VALUE"]].sort_values('P_VALUE')
+        def save_to_excel(filename, dfs):
+            # Given a dict of dataframes, for example:
+            # dfs = {'gadgets': df_gadgets, 'widgets': df_widgets}
+            writer = pd.ExcelWriter(filename, engine='xlsxwriter')
+            for sheetname, df in dfs.items():  # loop through `dict` of dataframes
+                df.to_excel(writer, sheet_name=sheetname)  # send df to writer
+                worksheet = writer.sheets[sheetname]  # pull worksheet object
+                for idx, col in enumerate(df.columns):  # loop through all columns
+                    series = df[col]
+                    max_len = series.astype(str).map(len).max() + 1
+                    worksheet.set_column(idx + 1, idx + 1, max_len)  # set column width
+            writer.save()
+
+        sel = rez.groupby('SELL')['SORT'].mean().sort_values(ascending=False).to_frame(name='SORT')
+        sel['SORT'] = sel['SORT'] / sel['SORT'].sum()
+        buy = rez.groupby('BUY')['SORT'].mean().sort_values(ascending=False).to_frame(name='SORT')
+        buy['SORT'] = buy['SORT'] / buy['SORT'].sum()
+        save_to_excel(f'portfolio/reports/rec_ops_{str(datetime.today())[:10]}.xlsx',
+                      {'rating_full': rez,
+                       'SELL': sel,
+                       'BUY': buy})
+
+        return rez[["SELL", "Q_SELL", "BUY", "Q_BUY", "GRAD_DIFF", "TURNOVER", "P_VALUE"]]
