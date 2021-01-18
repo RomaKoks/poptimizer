@@ -20,7 +20,6 @@ if __name__ == '__main__':
         print('NOW is', datetime.today())
         first = False
         try:
-            sleep(60)
             evolve()
         except Exception as e:
             exc_info = sys.exc_info()
