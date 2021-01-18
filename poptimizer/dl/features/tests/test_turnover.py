@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 import torch
 
-from poptimizer.data.config import bootstrap
+import poptimizer.data.app.bootstrap
 from poptimizer.dl.features import turnover, data_params, FeatureType
 
 PARAMS = {
@@ -14,8 +14,8 @@ PARAMS = {
 
 @pytest.fixture(scope="module", name="params")
 def make_params():
-    saved_start_date = bootstrap.START_DATE
-    bootstrap.START_DATE = pd.Timestamp("2010-09-01")
+    saved_start_date = poptimizer.data.app.bootstrap.START_DATE
+    poptimizer.data.app.bootstrap.START_DATE = pd.Timestamp("2010-09-01")
     saved_test_days = data_params.FORECAST_DAYS
     data_params.FORECAST_DAYS = 240
 
@@ -23,7 +23,7 @@ def make_params():
     yield params
 
     data_params.FORECAST_DAYS = saved_test_days
-    bootstrap.START_DATE = saved_start_date
+    poptimizer.data.app.bootstrap.START_DATE = saved_start_date
 
 
 @pytest.fixture(scope="function", name="turnover_cntlp")

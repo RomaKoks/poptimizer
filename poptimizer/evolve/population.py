@@ -10,6 +10,7 @@ import pymongo
 from poptimizer.config import POptimizerError
 from poptimizer.dl import Model, Forecast
 from poptimizer.evolve import store
+from poptimizer.evolve.chromosomes.chromosome import MUTATION_FACTOR
 from poptimizer.evolve.genotype import Genotype
 
 
@@ -25,7 +26,10 @@ class Organism:
     """
 
     def __init__(
-        self, *, _id: Optional[bson.ObjectId] = None, genotype: Optional[Genotype] = None,
+        self,
+        *,
+        _id: Optional[bson.ObjectId] = None,
+        genotype: Optional[Genotype] = None,
     ):
         self._data = store.Doc(id_=_id, genotype=genotype)
 
@@ -88,15 +92,29 @@ class Organism:
         return llh
 
     def find_weaker(self) -> "Organism":
-        """Находит организм с llh меньше или равное своему и максимальным временем обучения.
+        """Находит организм с наименьшим llh.
 
-        Может найти самого себя.
+        В оборе участвуют только организмы с таким же набором тикеров и датой обновления. Может найти
+        самого себя.
         """
         data = self._data
         collection = store.get_collection()
-        filter_ = dict(llh={"$lte": data.llh}, tickers=data.tickers)
+
+        filter_ = dict(timer={"$gte": data.timer}, tickers=data.tickers, date=data.date)
         id_dict = collection.find_one(
-            filter=filter_, projection=["_id"], sort=[("timer", pymongo.DESCENDING)]
+            filter=filter_,
+            projection=["_id"],
+            sort=[("llh", pymongo.ASCENDING)],
+        )
+        org = Organism(**id_dict)
+        if self.id != org.id:
+            return org
+
+        filter_ = dict(tickers=data.tickers, date=data.date)
+        id_dict = collection.find_one(
+            filter=filter_,
+            projection=["_id"],
+            sort=[("llh", pymongo.ASCENDING)],
         )
         return Organism(**id_dict)
 
@@ -104,10 +122,10 @@ class Organism:
         """Организм удаляется из популяции."""
         self._data.delete()
 
-    def make_child(self) -> "Organism":
+    def make_child(self, factor: float = MUTATION_FACTOR) -> "Organism":
         """Создает новый организм с помощью дифференциальной мутации."""
         genotypes = [organism.genotype for organism in _sample_organism(3)]
-        child_genotype = self.genotype.make_child(*genotypes)
+        child_genotype = self.genotype.make_child(*genotypes, factor)
         return Organism(genotype=child_genotype)
 
     def forecast(self, tickers: Tuple[str, ...], end: pd.Timestamp) -> Forecast:
@@ -166,7 +184,7 @@ def get_all_organisms() -> Iterable[Organism]:
     """Получить все имеющиеся организмы."""
     collection = store.get_collection()
     id_dicts = collection.find(
-        filter={}, projection=["_id"], sort=[("date", pymongo.ASCENDING), ("llh", pymongo.ASCENDING)]
+        filter={}, projection=["_id"], sort=[("date", pymongo.ASCENDING), ("llh", pymongo.DESCENDING)]
     )
     for id_dict in id_dicts:
         try:

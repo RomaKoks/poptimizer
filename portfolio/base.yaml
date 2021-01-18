@@ -33,6 +33,7 @@ positions:
   #  GEMA: 0
   GMKN: 0
   #  GTRK: 0
+  HHRU: 0
   HIMCP: 0
   HYDR: 0
   INGR: 0
@@ -70,6 +71,7 @@ positions:
   #  MTLR: 0
   MTLRP: 0
   MTSS: 0
+#  MU-RM: 0
   MVID: 0
   #  NKHP: 0
   #  NFLX-RM: 0
@@ -117,6 +119,7 @@ positions:
   #  TRMK: 0
   TRNFP: 0
   TTLK: 0
+#  TWTR-RM: 0
   #  UNKL: 0
   #  UNAC: 0
   UPRO: 0

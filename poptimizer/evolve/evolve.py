@@ -5,6 +5,7 @@ import pandas as pd
 
 from poptimizer.dl import ModelError
 from poptimizer.evolve import population
+from poptimizer.evolve.chromosomes.chromosome import MUTATION_FACTOR
 from poptimizer.portfolio.portfolio import Portfolio
 
 # Максимальная популяция
@@ -38,11 +39,58 @@ class Evolution:
         end = portfolio.date
 
         self._setup()
+        self._eval_exiting(portfolio)
 
         count = population.count()
 
+        factor = MUTATION_FACTOR
+
         for step, parent in enumerate(population.get_all_organisms(), 1):
-            print(f"***{end.date()}: Шаг эпохи - {step}/{count}***")
+            print(f"***{end.date()}: Шаг размножения - {step}/{count}***")
+            population.print_stat()
+            print(f"Фактор - {factor:.2%}")
+            print()
+
+            child = parent.make_child(factor)
+            print("Потомок:")
+            child_fitness = self._eval_and_print(child, tickers, end)
+            if child_fitness is None:
+                factor *= MUTATION_FACTOR
+                continue
+
+            if population.count() <= self._max_population:
+                continue
+
+            weakest = child.find_weaker()
+
+            print("Наиболее слабый - удаляю:")
+            self._eval_and_print(weakest, tickers, end)
+            weakest.die()
+
+    def _setup(self) -> NoReturn:
+        """Создает популяцию из организмов по умолчанию.
+
+        Если организмов меньше 4 - минимальное количество для осуществления эволюции.
+        """
+        count = population.count()
+        print(f"Имеется {count} организмов из {self._max_population}")
+        print()
+
+        if count < 4:
+            for i in range(1, self._max_population - count + 1):
+                print(f"Создаю базовые генотипы - {i}/{self._max_population - count}")
+                organism = population.create_new_organism()
+                print(organism)
+                print()
+
+    def _eval_exiting(self, portfolio: Portfolio) -> None:
+        """Оценивает существующих."""
+        tickers = tuple(portfolio.index[:-2])
+        end = portfolio.date
+        count = population.count()
+
+        for step, parent in enumerate(population.get_all_organisms(), 1):
+            print(f"***{end.date()}: Шаг переоценки существующих организмов - {step}/{count}***")
             population.print_stat()
             print()
 
@@ -50,24 +98,6 @@ class Evolution:
             parent_fitness = self._eval_and_print(parent, tickers, end)
             if parent_fitness is None:
                 continue
-
-            child = parent.make_child()
-            print("Потомок:")
-            child_fitness = self._eval_and_print(child, tickers, end)
-            if child_fitness is None:
-                continue
-
-            if population.count() <= self._max_population:
-                continue
-
-            weakest = parent
-            if parent_fitness > child_fitness:
-                weakest = child
-
-            weakest = weakest.find_weaker()
-            print("Более слабый и наиболее медленный - удаляю:")
-            self._eval_and_print(weakest, tickers, end)
-            weakest.die()
 
     @staticmethod
     def _eval_and_print(
@@ -92,19 +122,3 @@ class Evolution:
             print(f"Timer: {organism.timer / 10 ** 9:.0f}")
             print()
             return fitness
-
-    def _setup(self) -> NoReturn:
-        """Создает популяцию из организмов по умолчанию.
-
-        Если организмов меньше 4 - минимальное количество для осуществления эволюции.
-        """
-        count = population.count()
-        print(f"Имеется {count} организмов из {self._max_population}")
-        print()
-
-        if count < 4:
-            for i in range(1, self._max_population - count + 1):
-                print(f"Создаю базовые генотипы - {i}/{self._max_population - count}")
-                organism = population.create_new_organism()
-                print(organism)
-                print()
