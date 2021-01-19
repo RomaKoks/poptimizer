@@ -97,6 +97,7 @@ class Model:
             return bytes()
 
         buffer = io.BytesIO()
+        self._model.to('cpu')
         state_dict = self._model.state_dict()
         torch.save(state_dict, buffer)
         return buffer.getvalue()
