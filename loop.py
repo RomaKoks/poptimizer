@@ -1,7 +1,6 @@
 from poptimizer.__main__ import evolve, optimize
 from poptimizer.data.views.moex import last_history_date
 import traceback
-from time import sleep
 from datetime import datetime
 import sys
 
@@ -28,7 +27,7 @@ if __name__ == '__main__':
             print(e)
             if 'unspecified launch failure' in str(e):
                 break
-    if datetime.today().hour > 7:
+    if datetime.today().hour >= 7:
         date = last_history_date()
         try:
             optimize(date)
