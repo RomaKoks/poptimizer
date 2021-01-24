@@ -59,7 +59,7 @@ class Portfolio:
         self._shares[CASH] = cash
         self._shares[PORTFOLIO] = 1
         self._shares.name = "SHARES"
-        if value is not None and not np.isclose(self.value[PORTFOLIO], value):
+        if value is not None and not np.isclose(self.value[PORTFOLIO], value, rtol=2.0e-4):
             raise POptimizerError(
                 f"Введенная стоимость портфеля {value} " f"не равна расчетной {self.value[PORTFOLIO]}"
             )
@@ -185,8 +185,7 @@ class Portfolio:
         last_turnover = self._median_turnover(tuple(self.index[:-2]), MAX_HISTORY)
         result = (self.value / last_turnover).reindex(self.index)
         last_turnover = last_turnover * result.max() - self.value
-        result = last_turnover / (self.value[PORTFOLIO] * MAX_TRADE)
-        result[result < 0] = 0
+        result = last_turnover / self.value[PORTFOLIO]
         max_factor = result.sum()
         result[CASH] = max_factor
         result[PORTFOLIO] = max_factor

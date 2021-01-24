@@ -25,9 +25,10 @@ positions:
   #  ENPG: 0
   ENRU: 0
   FEES: 0
-  #  FESH: 0
-  #  FXCN: 0
-  #  FXKZ: 0
+#  FESH: 0
+#  FXCN: 0
+#  FXDE: 0
+#  FXKZ: 0
   GAZP: 0
   GCHE: 0
   #  GEMA: 0
@@ -73,9 +74,8 @@ positions:
   MTSS: 0
 #  MU-RM: 0
   MVID: 0
-  #  NKHP: 0
   #  NFLX-RM: 0
-  NKHP: 0
+#  NKHP: 0
   NKNC: 0
   NKNCP: 0
   NLMK: 0
