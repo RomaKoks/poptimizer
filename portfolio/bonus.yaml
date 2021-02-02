@@ -5,7 +5,6 @@ positions:
   MGNT: 0
   PLZL: 0
   KZOS: 0
-  BISV: 0
   KBSB: 0
   TRMK: 0
   TRNFP: 0
@@ -66,3 +65,4 @@ positions:
   MTSS: 0
   KRSB: 0
 
+  INGR: 0
