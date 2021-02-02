@@ -1,45 +1,9 @@
-"""Тесты для данных по котировкам."""
+"""Тесты для отображения данных о котировках."""
 import pandas as pd
 import pytest
 
 from poptimizer.data.app import bootstrap
-from poptimizer.data.views import moex
-
-
-def test_last_history_date():
-    """Проверка на тип и относительную корректность результата."""
-    date = moex.last_history_date()
-    assert isinstance(date, pd.Timestamp)
-    assert date < pd.Timestamp.now()
-    assert date > pd.Timestamp.now() - pd.DateOffset(days=10)
-
-
-def test_securities_with_reg_number():
-    """Проверка типа, количества и присутствия ДР."""
-    securities = moex.securities()
-    assert isinstance(securities, pd.Index)
-    assert securities.size >= 263
-    assert "AGRO" in securities
-    assert "YNDX" in securities
-    assert "BANEP" in securities
-
-
-LOT_CASES = (
-    (("AKRN", "KBTK"), (1, 10)),
-    (("MTSS", "MOEX", "MRSB"), (10, 10, 10000)),
-    (("SNGSP", "TTLK", "PMSBP", "RTKM", "SIBN"), (100, 10000, 10, 10, 10)),
-)
-
-
-@pytest.mark.parametrize("ticker, lots", LOT_CASES)
-def test_lot_size(ticker, lots):
-    """Проверка типа данных и размера лотов."""
-    lots_data = moex.lot_size(ticker)
-
-    assert isinstance(lots_data, pd.Series)
-    assert len(lots_data) == len(ticker)
-    assert tuple(lots_data.values) == lots
-
+from poptimizer.data.views import quotes
 
 PRICE_CASES = (
     ("2018-09-10", "AKRN", 4528),
@@ -54,7 +18,7 @@ PRICE_CASES = (
 @pytest.mark.parametrize("date, ticker, price", PRICE_CASES)
 def test_prices(date, ticker, price):
     """Тесты на тип и размер результата и для выборочных значений и заполнение пропусков."""
-    df = moex.prices(("AKRN", "GMKN", "KBTK", "MSTT"), pd.Timestamp("2020-10-09"))
+    df = quotes.prices(("AKRN", "GMKN", "KBTK", "MSTT"), pd.Timestamp("2020-10-09"))
 
     assert isinstance(df, pd.DataFrame)
     assert len(df) > 1452
@@ -74,7 +38,7 @@ TURNOVER_CASES = (
 @pytest.mark.parametrize("date, ticker, turnover", TURNOVER_CASES)
 def test_turnovers(date, ticker, turnover):
     """Тесты на тип и размер результата и для выборочных значений и заполнение пропусков."""
-    df = moex.turnovers(("PMSBP", "RTKM", "MSTT"), pd.Timestamp("2020-10-09"))
+    df = quotes.turnovers(("PMSBP", "RTKM", "MSTT"), pd.Timestamp("2020-10-09"))
 
     assert isinstance(df, pd.DataFrame)
     assert len(df) > 1452
@@ -99,8 +63,8 @@ T2_CASES = (
 @pytest.mark.parametrize("date, t2", T2_CASES)
 def test_t2_shift(date, t2):
     """Различные варианты сдвига около выходных."""
-    index = moex.prices(("NLMK", "GMKN"), pd.Timestamp("2018-10-08")).index
-    assert moex._t2_shift(pd.Timestamp(date), index) == pd.Timestamp(t2)
+    index = quotes.prices(("NLMK", "GMKN"), pd.Timestamp("2018-10-08")).index
+    assert quotes._t2_shift(pd.Timestamp(date), index) == pd.Timestamp(t2)
 
 
 DIV_PRICE_CASES = (
@@ -116,7 +80,7 @@ DIV_PRICE_CASES = (
 @pytest.mark.parametrize("df_n, date, ticker, chek", DIV_PRICE_CASES)
 def test_div_and_prices(df_n, date, ticker, chek):
     """Проверка выборочных цен и дивидендов с учетом налогов и сдвига."""
-    rez = moex.div_and_prices(("KZOS", "LSRG", "LKOH", "SBERP"), pd.Timestamp("2020-10-09"))
+    rez = quotes.div_and_prices(("KZOS", "LSRG", "LKOH", "SBERP"), pd.Timestamp("2020-10-09"))
     assert len(rez) == 2
 
     df = rez[df_n]

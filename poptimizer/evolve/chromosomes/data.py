@@ -12,7 +12,7 @@ BATCH_SIZE = GeneParams(
 HISTORY_DAYS = GeneParams(
     name="history_days",
     default_range=(50.1, 250.9),
-    lower_bound=5,
+    lower_bound=13,
     upper_bound=None,
     path=("data", "history_days"),
     phenotype_function=int,
@@ -97,6 +97,14 @@ IMOEX_ON = GeneParams(
     path=("data", "features", "IMOEX", "on"),
     phenotype_function=lambda x: x > 0,
 )
+TICKER_TYPE_ON = GeneParams(
+    name="ticker_type_on",
+    default_range=(-1.0, 0.0),
+    lower_bound=None,
+    upper_bound=None,
+    path=("data", "features", "TickerType", "on"),
+    phenotype_function=lambda x: x > 0,
+)
 
 
 class Data(Chromosome):
@@ -115,4 +123,5 @@ class Data(Chromosome):
         RVI_ON,
         MCFTRR_ON,
         IMOEX_ON,
+        TICKER_TYPE_ON,
     )
