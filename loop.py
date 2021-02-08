@@ -3,7 +3,7 @@ import traceback
 from datetime import datetime
 
 from poptimizer.__main__ import evolve, optimize
-from poptimizer.data.views.moex import last_history_date
+from poptimizer.data.views.listing import last_history_date
 
 
 def opt():
