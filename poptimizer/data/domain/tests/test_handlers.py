@@ -61,7 +61,7 @@ async def test_trading_day_ended(mocker):
     mocker.patch.object(
         handlers,
         "_load_by_id_and_handle_event",
-        side_effect=[["a"], [], ["b", "c"]],
+        side_effect=[["a"], ["b", "c"], ["usd"]],
     )
 
     assert await dispatcher.handle_event(event, fake_repo) == [
@@ -71,14 +71,37 @@ async def test_trading_day_ended(mocker):
         "a",
         "b",
         "c",
+        "usd",
     ]
+
+
+@pytest.mark.asyncio
+async def test_usd_traded(mocker):
+    """После загрузки курса началось обновление данных о торгуемых бумагах."""
+    dispatcher = handlers.EventHandlersDispatcher()
+    event = events.USDUpdated(date=date(2021, 2, 5), usd=pd.DataFrame)
+    fake_repo = mocker.Mock()
+    fake_loader_and_handler = mocker.patch.object(handlers, "_load_by_id_and_handle_event")
+
+    assert await dispatcher.handle_event(event, fake_repo) is fake_loader_and_handler.return_value
+    fake_loader_and_handler.assert_called_once_with(
+        fake_repo,
+        base.create_id(ports.SECURITIES),
+        event,
+    )
 
 
 @pytest.mark.asyncio
 async def test_ticker_traded(mocker):
     """Для торгуемого тикера должны обновляться котировки и дивиденды."""
     dispatcher = handlers.EventHandlersDispatcher()
-    event = events.TickerTraded("ticker", "ISIN", "M1", date(2020, 12, 22))
+    event = events.TickerTraded(
+        "ticker",
+        "ISIN",
+        "M1",
+        date(2020, 12, 22),
+        pd.DataFrame([1]),
+    )
     fake_repo = mocker.Mock()
     fake_load_by_id_and_handle_event = mocker.patch.object(
         handlers,
@@ -133,10 +156,16 @@ async def test_update_div(mocker):
     """Требуется обновить таблицу с внутренними и внешними данными по дивидендам."""
     dispatcher = handlers.EventHandlersDispatcher()
     event = events.UpdateDivCommand("TICKER3")
-    fake_repo = mocker.Mock()
+    fake_repo = mocker.AsyncMock()
     mocker.patch.object(handlers, "_load_by_id_and_handle_event", return_value=["event1", "event2"])
 
     first, *other = await dispatcher.handle_event(event, fake_repo)
+
+    handlers._load_by_id_and_handle_event.assert_called_once_with(
+        fake_repo,
+        base.create_id(ports.DIVIDENDS, "TICKER3"),
+        events.UpdateDivCommand("TICKER3", fake_repo.get.return_value.df),
+    )
 
     assert isinstance(first, events.DivExpected)
     assert first.ticker == "TICKER3"

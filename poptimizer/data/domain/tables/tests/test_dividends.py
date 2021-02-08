@@ -20,7 +20,7 @@ def create_div_table():
 DIV_UPDATE_CASES = (
     (
         None,
-        events.TickerTraded("TICKER", "ISIN", "M1", date(2020, 12, 17)),
+        events.TickerTraded("TICKER", "ISIN", "M1", date(2020, 12, 17), pd.DataFrame()),
         True,
     ),
     (
@@ -30,7 +30,7 @@ DIV_UPDATE_CASES = (
     ),
     (
         pd.DataFrame(),
-        events.TickerTraded("TICKER", "ISIN", "M1", date(2020, 12, 17)),
+        events.TickerTraded("TICKER", "ISIN", "M1", date(2020, 12, 17), pd.DataFrame()),
         False,
     ),
 )
@@ -46,14 +46,53 @@ def test_update_cond(div_table, df, event, rez):
 
 @pytest.mark.asyncio
 async def test_prepare_df(div_table, mocker):
-    """Данные загружаются для тикера из события."""
+    """Корректно рассчитываются значения.
+
+    Курс сдвигается вперед для отсутствующих дат.
+    Рублевые значения не пересчитываются.
+    Для задвоенных дат данные группируются и суммируются.
+    """
     div_table._gateway = mocker.AsyncMock()
+    div_table._gateway.get.return_value = pd.DataFrame(
+        [
+            [20, col.RUR],
+            [30, col.USD],
+            [40, col.USD],
+            [10, col.RUR],
+        ],
+        index=[
+            date(2020, 12, 16),
+            date(2020, 12, 16),
+            date(2021, 1, 11),
+            date(2021, 2, 5),
+        ],
+        columns=["TICKER", col.CURRENCY],
+    )
 
-    event = events.TickerTraded("TICKER", "ISIN", "M1", date(2020, 12, 17))
+    usd = pd.DataFrame(
+        [2, 3, 4],
+        index=[
+            date(2020, 12, 15),
+            date(2021, 1, 10),
+            date(2021, 2, 5),
+        ],
+        columns=[col.CLOSE],
+    )
+    event = events.TickerTraded("TICKER", "ISIN", "M1", date(2020, 12, 16), usd)
 
-    fake_get = div_table._gateway.get
-    assert await div_table._prepare_df(event) is fake_get.return_value
-    fake_get.assert_called_once_with("TICKER")
+    pd.testing.assert_frame_equal(
+        await div_table._prepare_df(event),
+        pd.DataFrame(
+            [80, 120, 10],
+            index=[
+                date(2020, 12, 16),
+                date(2021, 1, 11),
+                date(2021, 2, 5),
+            ],
+            columns=["TICKER"],
+        ),
+        check_dtype=False,
+    )
 
 
 def test_validate_new_df(mocker, div_table):
@@ -142,9 +181,9 @@ def create_div_ext_table():
 
 
 DIV_EXT_UPDATE_CASES = (
-    (lambda : None, True),
-    (lambda : datetime.utcnow() - timedelta(days=7, seconds=1), True),
-    (lambda : datetime.utcnow() - timedelta(days=7, seconds=-1), False),
+    (lambda: None, True),
+    (lambda: datetime.utcnow() - timedelta(days=7, seconds=1), True),
+    (lambda: datetime.utcnow() - timedelta(days=7, seconds=-1), False),
 )
 
 

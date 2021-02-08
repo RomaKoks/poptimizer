@@ -1,6 +1,7 @@
 """События связанные с таблицами."""
 import dataclasses
 import datetime
+from typing import Optional
 
 import pandas as pd
 
@@ -28,6 +29,14 @@ class TradingDayEnded(domain.AbstractEvent):
 
 
 @dataclasses.dataclass(frozen=True)
+class USDUpdated(domain.AbstractEvent):
+    """Произошло обновление курса."""
+
+    date: datetime.date
+    usd: pd.DataFrame = dataclasses.field(repr=False)
+
+
+@dataclasses.dataclass(frozen=True)
 class TickerTraded(domain.AbstractEvent):
     """Тикер торговался в указанный день."""
 
@@ -35,6 +44,7 @@ class TickerTraded(domain.AbstractEvent):
     isin: str
     market: str
     date: datetime.date
+    usd: pd.DataFrame = dataclasses.field(repr=False)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -58,3 +68,4 @@ class UpdateDivCommand(domain.AbstractEvent):
     """Команда обновить дивиденды."""
 
     ticker: str
+    usd: Optional[pd.DataFrame] = dataclasses.field(default=None, repr=False)

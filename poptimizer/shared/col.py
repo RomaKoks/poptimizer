@@ -15,6 +15,11 @@ CLOSE: Final = "CLOSE"
 HIGH: Final = "HIGH"
 LOW: Final = "LOW"
 TURNOVER: Final = "TURNOVER"
+CURRENCY: Final = "CURRENCY"
+
+# Типы валют
+RUR: Final = "RUR"
+USD: Final = "USD"
 
 # Типы ценных бумаг
 TYPES_N: Final = 4

@@ -1,5 +1,5 @@
 """Загрузка различных данных с MOEX."""
-from typing import List, Optional
+from typing import Dict, List, Optional, Union
 
 import aiomoex
 import pandas as pd
@@ -86,6 +86,25 @@ class AliasesGateway(gateways.BaseGateway):
         return [row["secid"] for row in json if row["isin"] == isin]
 
 
+IISJson = List[Dict[str, Union[str, int, float]]]
+
+
+def _format_candles_df(json: IISJson) -> pd.DataFrame:
+    df = pd.DataFrame(columns=["begin", "open", "close", "high", "low", "value", "end", "volume"])
+    df = df.append(json)
+    df = df.drop(["end", "volume"], axis=1)
+    df.columns = [
+        col.DATE,
+        col.OPEN,
+        col.CLOSE,
+        col.HIGH,
+        col.LOW,
+        col.TURNOVER,
+    ]
+    df[col.DATE] = pd.to_datetime(df[col.DATE])
+    return df.set_index(col.DATE)
+
+
 class QuotesGateway(gateways.BaseGateway):
     """Загружает котировки акций."""
 
@@ -109,17 +128,28 @@ class QuotesGateway(gateways.BaseGateway):
             end=last_date,
         )
 
-        df = pd.DataFrame(columns=("begin", "open", "close", "high", "low", "value", "end", "volume"))
-        df = df.append(json)
-        df = df.drop(["end", "volume"], axis=1)
+        return _format_candles_df(json)
 
-        df.columns = [
-            col.DATE,
-            col.OPEN,
-            col.CLOSE,
-            col.HIGH,
-            col.LOW,
-            col.TURNOVER,
-        ]
-        df[col.DATE] = pd.to_datetime(df[col.DATE])
-        return df.set_index(col.DATE)
+
+class USDGateway(gateways.BaseGateway):
+    """Курс доллара."""
+
+    _logger = adapters.AsyncLogger()
+
+    async def get(
+        self,
+        start_date: Optional[str],
+        last_date: str,
+    ) -> pd.DataFrame:
+        """Получение значений курса для диапазона дат."""
+        self._logger(f"({start_date}, {last_date})")
+        json = await aiomoex.get_market_candles(
+            self._session,
+            "USD000UTSTOM",
+            market="selt",
+            engine="currency",
+            start=start_date,
+            end=last_date,
+        )
+
+        return _format_candles_df(json)
