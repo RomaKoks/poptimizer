@@ -1,13 +1,16 @@
 """Оптимизатор портфеля."""
 import itertools
+import math
 from typing import Tuple
+
 import pandas as pd
 from scipy import stats
 
 from poptimizer import config
+from poptimizer.config import MAX_TRADE
 from poptimizer.dl.features.data_params import FORECAST_DAYS
 from poptimizer.portfolio import metrics
-from poptimizer.portfolio.portfolio import Portfolio, CASH
+from poptimizer.portfolio.portfolio import Portfolio, CASH, PORTFOLIO
 
 # Значимость отклонения градиента от нуля
 P_VALUE = 0.05
