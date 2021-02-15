@@ -56,16 +56,9 @@ class IndexCalculated(domain.AbstractEvent):
 
 
 @dataclasses.dataclass(frozen=True)
-class DivExpected(domain.AbstractEvent):
-    """Ожидаются дивиденды для тикера."""
-
-    ticker: str
-    df: pd.DataFrame = dataclasses.field(repr=False)
-
-
-@dataclasses.dataclass(frozen=True)
 class UpdateDivCommand(domain.AbstractEvent):
     """Команда обновить дивиденды."""
 
     ticker: str
+    market: Optional[str] = dataclasses.field(default=None)
     usd: Optional[pd.DataFrame] = dataclasses.field(default=None, repr=False)

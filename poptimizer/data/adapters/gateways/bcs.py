@@ -55,18 +55,20 @@ class BCSGateway(gateways.DivGateway):
 
     _logger = adapters.AsyncLogger()
 
-    async def get(self, ticker: str) -> pd.DataFrame:
+    async def __call__(self, ticker: str) -> pd.DataFrame:
         """Получение дивидендов для заданного тикера."""
         self._logger(ticker)
 
         try:
             rows = await _get_rows(ticker)
         except description.ParserError:
-            return pd.DataFrame(columns=[ticker])
+            return pd.DataFrame(columns=[ticker, col.CURRENCY])
 
         div_data = [(_parse_date(row), _parse_div(row)) for row in rows]
 
         df = pd.DataFrame(data=div_data, columns=[col.DATE, ticker])
         df = df.set_index(col.DATE)
 
-        return self._sort_and_agg(df)
+        df = self._sort_and_agg(df)
+        df[col.CURRENCY] = col.RUR
+        return df

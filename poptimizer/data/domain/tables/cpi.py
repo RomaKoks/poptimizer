@@ -25,14 +25,11 @@ class CPI(base.AbstractTable[events.TradingDayEnded]):
         last_cpi_month = df.index[-1].month
         last_full_month = (event.date.replace(day=1) - timedelta(days=1)).month
 
-        if last_cpi_month != last_full_month:
-            return True
-
-        return False
+        return last_cpi_month != last_full_month
 
     async def _prepare_df(self, event: events.TradingDayEnded) -> pd.DataFrame:
         """Загружает новый DataFrame."""
-        return await self._gateway.get()
+        return await self._gateway()
 
     def _validate_new_df(self, df_new: pd.DataFrame) -> None:
         """Индекс должен быть уникальным и возрастающим, а данные совпадать."""

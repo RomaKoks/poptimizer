@@ -5,13 +5,7 @@ from pyppeteer import errors
 
 from poptimizer.data.adapters.gateways import conomy
 from poptimizer.data.adapters.html import description, parser
-
-
-@pytest.mark.asyncio
-async def test_browser_loads_once():
-    """Браузер загружается однажды."""
-    browser = conomy.Browser()
-    assert await browser.get() is await browser.get()
+from poptimizer.shared import col
 
 
 @pytest.mark.asyncio
@@ -44,18 +38,17 @@ async def test_load_dividends_table(mocker):
 @pytest.mark.asyncio
 async def test_get_html(mocker):
     """Последовательный переход и загрузка html с дивидендами."""
-    fake_browser = mocker.patch.object(
-        conomy,
-        "BROWSER",
-        new=mocker.AsyncMock(),
-    ).get.return_value
-    fake_page = fake_browser.newPage.return_value
+    fake_browser = mocker.AsyncMock()
     fake_load_ticker_page = mocker.patch.object(conomy, "_load_ticker_page")
-    mocker.patch.object(conomy, "_load_dividends_table")
+    fake_load_dividends_table = mocker.patch.object(conomy, "_load_dividends_table")
 
-    html = await conomy._get_html("UNAC")
+    html = await conomy._get_html("UNAC", fake_browser)
+
+    fake_browser.get_new_page.assert_called_once_with()
+    fake_page = fake_browser.get_new_page.return_value
 
     fake_load_ticker_page.assert_called_once_with(fake_page, "UNAC")
+    fake_load_dividends_table.assert_called_once_with(fake_page)
     assert html is fake_page.content.return_value
 
 
@@ -97,9 +90,9 @@ DF = pd.DataFrame(
     columns=["BELU"],
 )
 DF_REZ = pd.DataFrame(
-    [[3.0], [4.0]],
+    [[3.0, col.RUR], [4.0, col.RUR]],
     index=["2014-11-25", "2020-01-20"],
-    columns=["BELU"],
+    columns=["BELU", col.CURRENCY],
 )
 
 
@@ -111,7 +104,7 @@ async def test_conomy_gateway(mocker):
     mocker.patch.object(parser, "get_df_from_html", return_value=DF)
 
     gateway = conomy.ConomyGateway()
-    pd.testing.assert_frame_equal(await gateway.get("BELU"), DF_REZ)
+    pd.testing.assert_frame_equal(await gateway.__call__("BELU"), DF_REZ)
 
 
 @pytest.mark.asyncio
@@ -120,5 +113,5 @@ async def test_conomy_gateway_web_error(mocker):
     mocker.patch.object(conomy, "_get_html", side_effect=errors.TimeoutError)
 
     gateway = conomy.ConomyGateway()
-    df = await gateway.get("BELU")
-    pd.testing.assert_frame_equal(df, pd.DataFrame(columns=["BELU"]))
+    df = await gateway.__call__("BELU")
+    pd.testing.assert_frame_equal(df, pd.DataFrame(columns=["BELU", col.CURRENCY]))

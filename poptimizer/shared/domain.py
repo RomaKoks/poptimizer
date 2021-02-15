@@ -1,7 +1,7 @@
 """Базовые классы доменной области."""
 import abc
 import dataclasses
-from typing import Dict, Generic, List, TypeVar
+from typing import Generic, TypeVar
 
 
 @dataclasses.dataclass(frozen=True)
@@ -18,7 +18,7 @@ class ID:
     name: str
 
 
-StateDict = Dict[str, object]
+StateDict = dict[str, object]
 
 
 class BaseEntity:
@@ -67,7 +67,7 @@ class AbstractRepo(Generic[EntityType], abc.ABC):
     """Абстрактный репозиторий."""
 
     @abc.abstractmethod
-    async def get(self, id_: ID) -> EntityType:
+    async def __call__(self, id_: ID) -> EntityType:
         """Получить доменный объект по ID."""
 
 
@@ -79,5 +79,5 @@ class AbstractHandler(Generic[EntityType], abc.ABC):
         self,
         event: AbstractEvent,
         repo: AbstractRepo[EntityType],
-    ) -> List[AbstractEvent]:
+    ) -> list[AbstractEvent]:
         """Обрабатывает событие и возвращает список новых порожденных событий."""
