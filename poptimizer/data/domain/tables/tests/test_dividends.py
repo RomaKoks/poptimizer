@@ -114,8 +114,8 @@ def test_new_events(div_table):
 @pytest.fixture(scope="function", name="smart_lab_table")
 def create_smart_lab_table():
     """Создает пустую таблицу дивидендов со SmartLab для тестов."""
-    id_ = base.create_id(ports.SMART_LAB)
-    return dividends.SmartLab(id_)
+    id_ = base.create_id(ports.DIV_NEW)
+    return dividends.DivNew(id_)
 
 
 def test_update_cond_smart_lab_table(smart_lab_table):
@@ -125,42 +125,23 @@ def test_update_cond_smart_lab_table(smart_lab_table):
 
 @pytest.mark.asyncio
 async def test_prepare_df_smart_lab_table(smart_lab_table, mocker):
-    """Данные загружаются с помощью шлюза."""
-    smart_lab_table._gateway = mocker.AsyncMock()
+    """Данные из нескольких шлюзов объединяются по оси х."""
+    smart_lab_table._gateways = (
+        mocker.AsyncMock(return_value=pd.DataFrame(index=["T-RM"])),
+        mocker.AsyncMock(return_value=pd.DataFrame(index=["AKRN"])),
+    )
 
-    fake_gateway = smart_lab_table._gateway
-    assert await smart_lab_table._prepare_df(object()) is fake_gateway.return_value
-    fake_gateway.assert_called_once_with()
+    df = await smart_lab_table._prepare_df(object())
+    assert df.index.tolist() == ["T-RM", "AKRN"]
 
 
 def test_new_events_smart_lab_table(smart_lab_table):
     """Новые события не создаются."""
+    smart_lab_table._df = pd.DataFrame(index=["AKRN", "AKRN", "CHMF"])
     new_events = smart_lab_table._new_events(object())
 
     assert isinstance(new_events, list)
     assert not new_events
-
-    answers = {
-        "AKRN": pd.DataFrame(
-            [3],
-            columns=["SmartLab"],
-            index=[datetime(2020, 12, 1)],
-        ),
-        "CHMF": pd.DataFrame(
-            [2, 1],
-            columns=["SmartLab"],
-            index=[datetime(2020, 12, 2), datetime(2020, 12, 3)],
-        ),
-    }
-
-    for new_event in new_events:
-        assert isinstance(new_event, events.DivExpected)
-        ticker = new_event.ticker
-        pd.testing.assert_frame_equal(
-            new_event.df,
-            answers[ticker],
-            check_names=False,
-        )
 
 
 @pytest.fixture(scope="function", name="div_ext_table")
@@ -190,7 +171,7 @@ async def test_prepare_df_div_ext(div_ext_table, mocker):
     """Проверка агрегации данных."""
     event = events.UpdateDivCommand(
         ticker="GAZP",
-        market="shares",
+        type_=col.ORDINARY,
         usd=pd.DataFrame(
             [2, 1],
             columns=[col.CLOSE],
@@ -204,8 +185,8 @@ async def test_prepare_df_div_ext(div_ext_table, mocker):
         index=[datetime(2020, 12, 4), datetime(2020, 12, 5)],
     )
     div_ext_table._gateways = (
-        dividends.GateWayDesc("Dohod", "shares", fake_gateway),
-        dividends.GateWayDesc("NASDAQ", "foreignshares", fake_gateway),
+        dividends.GateWayDesc("Dohod", col.ORDINARY, fake_gateway),
+        dividends.GateWayDesc("NASDAQ", col.FOREIGN, fake_gateway),
     )
 
     df = await div_ext_table._prepare_df(event)

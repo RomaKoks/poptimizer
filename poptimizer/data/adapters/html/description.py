@@ -1,18 +1,29 @@
 """Описание колонок для парсера html-таблиц."""
-import re
 from datetime import datetime
-from typing import Callable, Final, NamedTuple, Optional, Tuple, Union
+from typing import Callable, Final, NamedTuple, Optional, Union
+
+import pandas as pd
 
 from poptimizer import config
+from poptimizer.shared import col
 
-DIV_PATTERN: Final = r".*\d"
-DIV_PATTERN_US: Final = r"\$(.*\d)"
-DATE_PATTERN: Final = r"\d{2}\.\d{2}\.\d{4}"
-DATE_PATTERN_US: Final = r"\d{2}\/\d{2}\/\d{4}"
+# Параметры проверки обыкновенная акция или привилегированная
+COMMON_TICKER_LENGTH: Final = 4
+PREFERRED_TICKER_ENDING: Final = "P"
 
 
 class ParserError(config.POptimizerError):
     """Ошибки в парсинге html-таблиц."""
+
+
+def is_common(ticker: str) -> bool:
+    """Определяет является ли акция обыкновенной."""
+    if len(ticker) == COMMON_TICKER_LENGTH:
+        return True
+    elif len(ticker) == COMMON_TICKER_LENGTH + 1:
+        if ticker[COMMON_TICKER_LENGTH] == PREFERRED_TICKER_ENDING:
+            return False
+    raise ParserError(f"Некорректный тикер {ticker}")
 
 
 ParserFunc = Callable[[str], Union[None, float, datetime]]
@@ -31,46 +42,15 @@ class ColDesc(NamedTuple):
     """
 
     num: int
-    raw_name: Tuple[str, ...]
+    raw_name: tuple[str, ...]
     name: str
     parser_func: Optional[ParserFunc]
 
 
-def date_parser(date: str) -> Optional[datetime]:
-    """Функция парсинга значений в столбце с датами закрытия реестра."""
-    re_date = re.search(DATE_PATTERN, date)
-    if re_date:
-        date_string = re_date.group(0)
-        return datetime.strptime(date_string, "%d.%m.%Y")  # noqa: WPS323
-    return None
-
-
-def date_parser_us(date: str) -> Optional[datetime]:
-    """Парсинг даты в американском формате."""
-    re_date = re.search(DATE_PATTERN_US, date)
-    if re_date:
-        date_string = re_date.group(0)
-        return datetime.strptime(date_string, "%m/%d/%Y")  # noqa: WPS323
-    return None
-
-
-def div_parser(div: str) -> Optional[float]:
-    """Функция парсинга значений в столбце с дивидендами."""
-    re_div = re.search(DIV_PATTERN, div)
-    if re_div:
-        div_string = re_div.group(0)
-        div_string = div_string.replace(",", ".")
-        div_string = div_string.replace(" ", "")
-        return float(div_string)
-    return None
-
-
-def div_parser_us(div: str) -> Optional[float]:
-    """Функция парсинга дивидендов в долларах."""
-    re_div = re.search(DIV_PATTERN_US, div)
-    if re_div:
-        div_string = re_div.group(1)
-        div_string = div_string.replace(",", ".")
-        div_string = div_string.replace(" ", "")
-        return float(div_string)
-    return None
+def reformat_df_with_cur(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
+    """Разделяет столбец на валюту и значение."""
+    ticker_col = df[ticker]
+    df[col.CURRENCY] = ticker_col.str.slice(start=-3)
+    ticker_col = ticker_col.str.slice(stop=-3).str.strip()  # "27 "
+    df[ticker] = pd.to_numeric(ticker_col)
+    return df

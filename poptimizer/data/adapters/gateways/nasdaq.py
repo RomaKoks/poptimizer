@@ -1,11 +1,11 @@
 """Обновление данных с https://www.nasdaq.com/."""
-from typing import Final
+from typing import Final, Optional
 
 import pandas as pd
 from pyppeteer import errors
 
 from poptimizer.data.adapters.gateways import gateways
-from poptimizer.data.adapters.html import chromium, description, parser
+from poptimizer.data.adapters.html import cell_parser, chromium, description, parser
 from poptimizer.shared import adapters, col
 
 # Адрес и xpath таблицы
@@ -23,29 +23,28 @@ def get_col_desc(ticker: str) -> parser.Descriptions:
         num=4,
         raw_name=("RECORD DATE",),
         name=col.DATE,
-        parser_func=description.date_parser_us,
+        parser_func=cell_parser.date_us,
     )
     div_col = description.ColDesc(
         num=2,
         raw_name=("CASH AMOUNT",),
         name=ticker,
-        parser_func=description.div_parser_us,
+        parser_func=cell_parser.div_us,
     )
     return [date_col, div_col]
 
 
 async def _load_ticker_page(url: str, browser: chromium.Browser = chromium.BROWSER) -> str:
     """Загружает страницу с таблицей дивидендов."""
-    page = await browser.get_new_page()
+    async with browser.get_new_page() as page:
+        try:
+            # На странице много рекламных банеров - она практически никогда не загружается полностью
+            # Достаточно немного подождать для частичного перехода, а потом ждать только загрузки таблицы
+            await page.goto(url, options={"timeout": PARTIAL_LOAD_TIMEOUT})
+        except errors.TimeoutError:
+            await page.waitForXPath(TABLE_XPATH)
 
-    try:
-        # На странице много рекламных банеров, поэтому она практически никогда не загружается полностью
-        # Достаточно немного подождать для перехода на страницу, а потом ждать только загрузки таблицы
-        await page.goto(url, options={"timeout": PARTIAL_LOAD_TIMEOUT})
-    except errors.TimeoutError:
-        await page.waitForXPath(TABLE_XPATH)
-
-    return await page.content()
+        return await page.content()
 
 
 class NASDAQGateway(gateways.DivGateway):
@@ -53,7 +52,7 @@ class NASDAQGateway(gateways.DivGateway):
 
     _logger = adapters.AsyncLogger()
 
-    async def __call__(self, ticker: str) -> pd.DataFrame:
+    async def __call__(self, ticker: str) -> Optional[pd.DataFrame]:
         """Получение дивидендов для заданного тикера."""
         self._logger(ticker)
 
@@ -64,7 +63,7 @@ class NASDAQGateway(gateways.DivGateway):
         try:
             df = parser.get_df_from_html(html, 0, cols_desc)
         except description.ParserError:
-            return pd.DataFrame(columns=[ticker, col.CURRENCY])
+            return None
 
         df = df.groupby(lambda date: date).sum()
         df[col.CURRENCY] = col.USD

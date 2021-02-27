@@ -4,7 +4,7 @@ import pytest
 from pyppeteer import errors
 
 from poptimizer.data.adapters.gateways import conomy
-from poptimizer.data.adapters.html import description, parser
+from poptimizer.data.adapters.html import parser
 from poptimizer.shared import col
 
 
@@ -38,36 +38,18 @@ async def test_load_dividends_table(mocker):
 @pytest.mark.asyncio
 async def test_get_html(mocker):
     """Последовательный переход и загрузка html с дивидендами."""
-    fake_browser = mocker.AsyncMock()
+    fake_browser = mocker.MagicMock()
     fake_load_ticker_page = mocker.patch.object(conomy, "_load_ticker_page")
     fake_load_dividends_table = mocker.patch.object(conomy, "_load_dividends_table")
 
     html = await conomy._get_html("UNAC", fake_browser)
 
     fake_browser.get_new_page.assert_called_once_with()
-    fake_page = fake_browser.get_new_page.return_value
+    fake_page = fake_browser.get_new_page.return_value.__aenter__.return_value
 
     fake_load_ticker_page.assert_called_once_with(fake_page, "UNAC")
     fake_load_dividends_table.assert_called_once_with(fake_page)
     assert html is fake_page.content.return_value
-
-
-TICKER_CASES = (
-    ("GAZP", True),
-    ("SNGSP", False),
-    ("WRONG", None),
-    ("AAPL-RM", None),
-)
-
-
-@pytest.mark.parametrize("ticker, answer", TICKER_CASES)
-def test_is_common(ticker, answer):
-    """Проверка, что тикер соответствует обыкновенной акции."""
-    if answer is None:
-        with pytest.raises(description.ParserError, match="Некорректный тикер"):
-            conomy._is_common(ticker)
-    else:
-        assert conomy._is_common(ticker) is answer
 
 
 DESC_CASES = (
@@ -114,4 +96,5 @@ async def test_conomy_gateway_web_error(mocker):
 
     gateway = conomy.ConomyGateway()
     df = await gateway.__call__("BELU")
-    pd.testing.assert_frame_equal(df, pd.DataFrame(columns=["BELU", col.CURRENCY]))
+
+    assert df is None

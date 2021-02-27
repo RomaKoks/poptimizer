@@ -11,8 +11,8 @@ from poptimizer.shared import col
 @pytest.mark.asyncio
 async def test_load_ticker_page(mocker):
     """Последовательность загрузки страницы, которое завершилось полностью."""
-    fake_browser = mocker.AsyncMock()
-    fake_page = fake_browser.get_new_page.return_value
+    fake_browser = mocker.MagicMock()
+    fake_page = fake_browser.get_new_page.return_value.__aenter__.return_value
 
     html = await nasdaq._load_ticker_page("qqq", fake_browser)
 
@@ -25,8 +25,8 @@ async def test_load_ticker_page(mocker):
 @pytest.mark.asyncio
 async def test_load_ticker_page_wait_only_table(mocker):
     """Последовательность загрузки с ожиданием только таблицы."""
-    fake_browser = mocker.AsyncMock()
-    fake_page = fake_browser.get_new_page.return_value
+    fake_browser = mocker.MagicMock()
+    fake_page = fake_browser.get_new_page.return_value.__aenter__.return_value
     fake_page.goto.side_effect = errors.TimeoutError
 
     html = await nasdaq._load_ticker_page("qqq", fake_browser)
@@ -67,7 +67,6 @@ async def test_nasdaq_gateway_error(mocker):
     mocker.patch.object(nasdaq.parser, "get_df_from_html", side_effect=description.ParserError)
 
     gateway = nasdaq.NASDAQGateway()
-    pd.testing.assert_frame_equal(
-        await gateway.__call__("BELU"),
-        pd.DataFrame(columns=["BELU", col.CURRENCY]),
-    )
+    df = await gateway("BELU")
+
+    assert df is None

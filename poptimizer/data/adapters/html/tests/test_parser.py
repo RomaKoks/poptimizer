@@ -3,7 +3,7 @@ import aiohttp
 import pandas as pd
 import pytest
 
-from poptimizer.data.adapters.html import description, parser
+from poptimizer.data.adapters.html import cell_parser, description, parser
 
 BAD_URL = "https://www.dohod.ru/wrong"
 
@@ -11,13 +11,13 @@ DESC_SINGLE_HEADER = description.ColDesc(
     num=2,
     raw_name=("(руб.)",),
     name="YAKG",
-    parser_func=description.div_parser,
+    parser_func=cell_parser.div_ru,
 )
 DESC_MULTI_HEADER = description.ColDesc(
     num=1,
     raw_name=("G", "Размер"),
     name="VSMO",
-    parser_func=description.div_parser,
+    parser_func=cell_parser.div_ru,
 )
 
 
@@ -28,9 +28,9 @@ async def test_get_html(mocker):
 
     html = await parser.get_html(BAD_URL, fake_session)
 
-    fake_session.__call__.assert_called_once_with(BAD_URL)
+    fake_session.get.assert_called_once_with(BAD_URL)
 
-    context_mng = fake_session.__call__.return_value
+    context_mng = fake_session.get.return_value
     context_mng.__aenter__.assert_called_once()  # noqa: WPS609
 
     respond = context_mng.__aenter__.return_value  # noqa: WPS609
@@ -43,7 +43,7 @@ async def test_get_html(mocker):
 async def test_get_html_raise(mocker):
     """Сообщение об ошибке при некорректном URL."""
     fake_session = mocker.MagicMock()
-    context_mng = fake_session.__call__.return_value
+    context_mng = fake_session.get.return_value
     respond = context_mng.__aenter__.return_value  # noqa: WPS609
     respond.raise_for_status = mocker.Mock(side_effect=aiohttp.ClientResponseError("", ""))
 
@@ -74,7 +74,7 @@ def test_get_raw_df(mocker):
     read_html.assert_called_once_with(
         "test_table",
         header=[0],
-        converters={2: description.div_parser},
+        converters={2: cell_parser.div_ru},
         thousands=" ",
         displayed_only=False,
     )

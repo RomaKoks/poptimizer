@@ -1,13 +1,13 @@
 """Загрузка данных с https://www.conomy.ru/."""
 import asyncio
-from typing import Final, cast
+from typing import Final, Optional, cast
 
 import pandas as pd
 from pyppeteer import errors
 from pyppeteer.page import Page
 
 from poptimizer.data.adapters.gateways import gateways
-from poptimizer.data.adapters.html import chromium, description, parser
+from poptimizer.data.adapters.html import cell_parser, chromium, description, parser
 from poptimizer.shared import adapters, col
 
 # Параметры поиска страницы эмитента
@@ -20,10 +20,6 @@ DIVIDENDS_TABLE: Final = '//*[@id="page-container"]/div[2]/div/div[1]'
 
 # Номер таблицы на html-странице и строки с заголовком
 TABLE_INDEX: Final = 1
-
-# Параметры проверки обыкновенная акция или привилегированная
-COMMON_TICKER_LENGTH: Final = 4
-PREFERRED_TICKER_ENDING: Final = "P"
 
 # Задержка для принудительной остановки Chromium
 CHROMIUM_TIMEOUT = 30
@@ -48,20 +44,10 @@ async def _load_dividends_table(page: Page) -> None:
 
 async def _get_html(ticker: str, browser: chromium.Browser = chromium.BROWSER) -> str:
     """Возвращает html-код страницы с данными по дивидендам с сайта https://www.conomy.ru/."""
-    page = await browser.get_new_page()
-    await _load_ticker_page(page, ticker)
-    await _load_dividends_table(page)
-    return cast(str, await page.content())
-
-
-def _is_common(ticker: str) -> bool:
-    """Определяет является ли акция обыкновенной."""
-    if len(ticker) == COMMON_TICKER_LENGTH:
-        return True
-    elif len(ticker) == COMMON_TICKER_LENGTH + 1:
-        if ticker[COMMON_TICKER_LENGTH] == PREFERRED_TICKER_ENDING:
-            return False
-    raise description.ParserError(f"Некорректный тикер {ticker}")
+    async with browser.get_new_page() as page:
+        await _load_ticker_page(page, ticker)
+        await _load_dividends_table(page)
+        return cast(str, await page.content())
 
 
 def _get_col_desc(ticker: str) -> parser.Descriptions:
@@ -70,16 +56,16 @@ def _get_col_desc(ticker: str) -> parser.Descriptions:
         num=5,
         raw_name=("E", "Дата закрытия реестра акционеров", "Под выплату дивидендов"),
         name=col.DATE,
-        parser_func=description.date_parser,
+        parser_func=cell_parser.date_ru,
     )
     columns = [date]
 
-    if _is_common(ticker):
+    if description.is_common(ticker):
         common = description.ColDesc(
             num=7,
             raw_name=("G", "Размер дивидендов", "АОИ"),
             name=ticker,
-            parser_func=description.div_parser,
+            parser_func=cell_parser.div_ru,
         )
         columns.append(common)
         return columns
@@ -88,7 +74,7 @@ def _get_col_desc(ticker: str) -> parser.Descriptions:
         num=8,
         raw_name=("H", "Размер дивидендов", "АПИ"),
         name=ticker,
-        parser_func=description.div_parser,
+        parser_func=cell_parser.div_ru,
     )
     columns.append(preferred)
     return columns
@@ -99,7 +85,7 @@ class ConomyGateway(gateways.DivGateway):
 
     _logger = adapters.AsyncLogger()
 
-    async def __call__(self, ticker: str) -> pd.DataFrame:
+    async def __call__(self, ticker: str) -> Optional[pd.DataFrame]:
         """Получение дивидендов для заданного тикера."""
         self._logger(ticker)
 
@@ -108,7 +94,8 @@ class ConomyGateway(gateways.DivGateway):
             # Поэтому загрузка принудительно приостанавливается
             html = await asyncio.wait_for(_get_html(ticker), timeout=CHROMIUM_TIMEOUT)
         except (errors.TimeoutError, asyncio.exceptions.TimeoutError):
-            return pd.DataFrame(columns=[ticker, col.CURRENCY])
+            return None
+
         cols_desc = _get_col_desc(ticker)
         df = parser.get_df_from_html(html, TABLE_INDEX, cols_desc)
         df = df.dropna()
