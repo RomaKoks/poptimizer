@@ -1,3 +1,4 @@
+import os
 import sys
 import traceback
 from datetime import datetime
@@ -36,3 +37,4 @@ if __name__ == '__main__':
 
     if datetime.today().hour >= 7:
         opt()
+        os.system("shutdown /s /t 1")
