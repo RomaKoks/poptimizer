@@ -12,7 +12,7 @@ BATCH_SIZE = GeneParams(
 HISTORY_DAYS = GeneParams(
     name="history_days",
     default_range=(50.1, 250.9),
-    lower_bound=24,
+    lower_bound=28,
     upper_bound=None,
     path=("data", "history_days"),
     phenotype_function=int,
@@ -113,6 +113,14 @@ USD_ON = GeneParams(
     path=("data", "features", "USD", "on"),
     phenotype_function=lambda x: x > 0,
 )
+OPEN_ON = GeneParams(
+    name="open_on",
+    default_range=(-1.0, 0.0),
+    lower_bound=None,
+    upper_bound=None,
+    path=("data", "features", "Open", "on"),
+    phenotype_function=lambda x: x > 0,
+)
 
 
 class Data(Chromosome):
@@ -133,4 +141,5 @@ class Data(Chromosome):
         IMOEX_ON,
         TICKER_TYPE_ON,
         USD_ON,
+        OPEN_ON,
     )
