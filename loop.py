@@ -1,4 +1,4 @@
-import os
+import subprocess
 import sys
 import traceback
 from datetime import datetime
@@ -35,6 +35,7 @@ if __name__ == '__main__':
             if 'unspecified launch failure' in str(e):
                 break
 
-    if datetime.today().hour >= 7:
+    if 7 <= datetime.today().hour < 10:
         opt()
-        os.system("shutdown /s /t 1")
+        shut_down = ["shutdown", "-f", "-s", "-t", "30"]
+        subprocess.call(shut_down)

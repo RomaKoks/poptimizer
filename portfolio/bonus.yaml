@@ -5,10 +5,9 @@ positions:
   MGNT: 0
   PLZL: 0
   KZOS: 0
-  KBSB: 0
   TRMK: 0
   TRNFP: 0
-  LNZLP: 0
+#  LNZLP: 0
   TGKA: 0
   AFLT: 0
 #  KBTK: 0
@@ -33,7 +32,6 @@ positions:
   SBERP: 0
   MVID: 0
   MSRS: 0
-  MSTT: 0
   MGTS: 0
   TATN: 0
   VSMO: 0
@@ -66,3 +64,5 @@ positions:
   KRSB: 0
 
   INGR: 0
+  FIVE: 0
+  AGRO: 0
