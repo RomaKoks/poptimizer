@@ -156,6 +156,7 @@ class Portfolio:
         try:
             price = price.loc[self.date]
         except KeyError:
+            print(price)
             raise POptimizerError(f"Для даты {self._date.date()} отсутствуют исторические котировки")
         price[CASH] = 1
         price[PORTFOLIO] = (self.shares[:-1] * price).sum(axis=0)

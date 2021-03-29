@@ -1,6 +1,7 @@
 """Оптимизатор портфеля."""
 import itertools
-import math
+from datetime import datetime
+
 from typing import Tuple
 
 import pandas as pd
@@ -108,7 +109,7 @@ class Optimizer:
         rez = rez.sort_values(["RISK_CON", "R_DIFF"], ascending=[True, False])
         rez = rez.drop_duplicates("SELL")
         rez.index = pd.RangeIndex(start=1, stop=len(rez) + 1)
-
+        rez.to_excel(f'portfolio/reports/rec_ops_{str(datetime.today())[:10]}.xlsx')
         return rez
 
     def _wilcoxon_tests(self) -> Tuple[str, str, float, float]:

@@ -22,7 +22,7 @@ if __name__ == '__main__':
         opt()
 
     first = True
-    while first or (2 <= datetime.today().hour < 7):
+    while first or (2 <= datetime.today().hour < 7) or (datetime.today().hour == 23):
         print('NOW is', datetime.today())
         first = False
         try:
@@ -35,7 +35,7 @@ if __name__ == '__main__':
             if 'unspecified launch failure' in str(e):
                 break
 
-    if 7 <= datetime.today().hour < 10:
+    if datetime.today().hour in [7, 8]:
         opt()
         shut_down = ["shutdown", "-f", "-s", "-t", "30"]
         subprocess.call(shut_down)
