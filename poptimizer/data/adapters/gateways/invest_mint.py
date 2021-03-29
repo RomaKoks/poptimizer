@@ -53,7 +53,7 @@ def get_col_desc(ticker: str) -> parser.Descriptions:
         parser_func=_date_parser,
     )
 
-    div_col_n = 5
+    div_col_n = 6
     if ticker[-3:] == "-RM":
         div_col_n -= 1
 
@@ -95,10 +95,9 @@ class InvestMintGateway(gateways.DivGateway):
 
         try:
             html = await parser.get_html(url)
+            table_index = _find_table_n(html)
         except description.ParserError:
             return None
-
-        table_index = _find_table_n(html)
 
         try:
             df = parser.get_df_from_html(html, table_index, cols_desc)
