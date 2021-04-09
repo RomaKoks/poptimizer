@@ -18,11 +18,12 @@ def opt():
 
 
 if __name__ == '__main__':
-    if datetime.today().hour > 7:
+    time_thresh = 6
+    if datetime.today().hour > time_thresh:
         opt()
 
     first = True
-    while first or (2 <= datetime.today().hour < 7) or (datetime.today().hour == 23):
+    while first or (time_thresh - 4 <= datetime.today().hour < time_thresh) or (datetime.today().hour == 23):
         print('NOW is', datetime.today())
         first = False
         try:
@@ -35,7 +36,7 @@ if __name__ == '__main__':
             if 'unspecified launch failure' in str(e):
                 break
 
-    if datetime.today().hour in [7, 8]:
+    if time_thresh <= datetime.today().hour < time_thresh + 2:
         opt()
         shut_down = ["shutdown", "-f", "-s", "-t", "30"]
         subprocess.call(shut_down)

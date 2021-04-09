@@ -2,6 +2,7 @@
 import logging
 import pathlib
 import torch
+import sys
 
 import pandas as pd
 
@@ -11,7 +12,8 @@ class POptimizerError(Exception):
 
 
 # Конфигурация логгера
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO,
+                    handlers=[logging.FileHandler("debug.log"), logging.StreamHandler(sys.stdout)])
 
 # Устройство на котором будет производиться обучение
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") # 

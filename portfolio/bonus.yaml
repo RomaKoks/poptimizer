@@ -18,7 +18,7 @@ positions:
   ROSN: 0
   MRKU: 0
   ENRU: 0
-  MTLRP: 0
+#  MTLRP: 0
   SBER: 0
   MRKV: 0
   RTKM: 0
@@ -66,3 +66,11 @@ positions:
   INGR: 0
   FIVE: 0
   AGRO: 0
+  FLOT: 0
+  GLTR: 0
+  KBSB: 0
+  MSRS: 0
+  DIOD: 0
+  ETLN: 0
+  SMLT: 0
+  FLOT: 0

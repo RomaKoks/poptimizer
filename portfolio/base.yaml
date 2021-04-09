@@ -15,7 +15,7 @@ positions:
   #  BRZL: 0
   #  BSPB: 0
   #  CBOM: 0
-  CHEP: 0
+  #  CHEP: 0
   CHMF: 0
   #  CNTL: 0
   #  CNTLP: 0
@@ -71,7 +71,7 @@ positions:
   MSRS: 0
   #  MSTT: 0
   #  MTLR: 0
-  MTLRP: 0
+#  MTLRP: 0
   MTSS: 0
 #  MU-RM: 0
   MVID: 0
