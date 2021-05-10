@@ -11,7 +11,7 @@ from poptimizer import config
 from poptimizer.config import MAX_TRADE
 from poptimizer.dl.features.data_params import FORECAST_DAYS
 from poptimizer.portfolio import metrics
-from poptimizer.portfolio.portfolio import Portfolio, CASH, PORTFOLIO
+from poptimizer.portfolio.portfolio import CASH, PORTFOLIO, Portfolio
 
 # Значимость отклонения градиента от нуля
 P_VALUE = 0.05
@@ -167,7 +167,7 @@ class Optimizer:
             if sell == buy or turnover_all[buy] == 0:
                 continue
 
-            factor = turnover_all[buy] - (weight[sell] + weight[CASH] - weight[buy]) / 2
+            factor = turnover_all[buy] - (weight[sell] + weight[CASH])
             if factor < 0:
                 continue
 

@@ -1,8 +1,8 @@
 """Реализация класса портфеля."""
 import collections
 import functools
-from typing import Dict, Optional, Union, NoReturn
 from datetime import datetime
+from typing import Dict, NoReturn, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -10,7 +10,7 @@ import yaml
 
 import poptimizer.data.views.quotes
 from poptimizer import config
-from poptimizer.config import POptimizerError, MAX_TRADE
+from poptimizer.config import MAX_TRADE, POptimizerError
 from poptimizer.data.views import listing
 from poptimizer.dl.features import data_params
 from poptimizer.store import database

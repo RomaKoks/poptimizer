@@ -1,10 +1,10 @@
 """Основные настраиваемые параметры"""
 import logging
 import pathlib
-import torch
 import sys
 
 import pandas as pd
+import torch
 
 
 class POptimizerError(Exception):
@@ -20,10 +20,10 @@ DEVICE = torch.device("cpu") # "cuda" if torch.cuda.is_available() else
 
 # Количество колонок в распечатках без переноса на несколько страниц
 pd.set_option("display.max_columns", 20)
-pd.set_option("display.max_rows", 150)
+pd.set_option("display.max_rows", 170)
 pd.set_option("display.width", None)
 
-# Путь к директории с отчетам
+# Путь к директории с отчетами
 REPORTS_PATH = pathlib.Path(__file__).parents[1] / "reports"
 
 # Путь к директории с портфелями
