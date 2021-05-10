@@ -20,9 +20,26 @@ P_VALUE = 0.05
 COSTS = (config.YEAR_IN_TRADING_DAYS * 2 / FORECAST_DAYS) * (0.025 / 100)
 
 
+def save_to_excel(filename, dfs):
+    # Given a dict of dataframes, for example:
+    # dfs = {'gadgets': df_gadgets, 'widgets': df_widgets}
+    writer = pd.ExcelWriter(filename, engine='xlsxwriter')
+    for sheetname, df in dfs.items():  # loop through `dict` of dataframes
+        df.to_excel(writer, sheet_name=sheetname)  # send df to writer
+        worksheet = writer.sheets[sheetname]  # pull worksheet object
+        for idx, col in enumerate(df.columns):  # loop through all columns
+            series = df[col]
+            max_len = series.astype(str).map(len).max() + 1
+            worksheet.set_column(idx + 1, idx + 1, max_len)  # set column width
+    writer.save()
+
+
+
+
+
+
 class Optimizer:
     """Предлагает сделки для улучшения метрики портфеля."""
-
     def __init__(self, portfolio: Portfolio, p_value: float = P_VALUE):
         """Учитывается градиент, его ошибку и ликвидность бумаг.
 
@@ -86,6 +103,20 @@ class Optimizer:
         positions = len(self.portfolio.shares) - 2
         return positions_to_sell * positions - positions_to_sell + 1
 
+    def _calculate_lots(self, rez):
+        vc = None
+        banned = set()
+        zero_lots_exists = False
+        while vc is None or zero_lots_exists:
+            if zero_lots_exists:
+                banned.add(vc.loc[vc['lots_to_buy'] < 1].index[-1])
+            vc = rez.loc[~(rez['BUY'].isin(banned)), 'BUY'].value_counts(normalize=True).to_frame(name='proportion')
+            vc['APRX_SUM'] = vc['proportion'] * min(self.portfolio.value['CASH'], 50000)
+            vc['lot_price'] = self.portfolio.lot_size.loc[vc.index] * self.portfolio.price.loc[vc.index]
+            vc['lots_to_buy'] = vc['APRX_SUM'] / vc['lot_price']
+            zero_lots_exists = (vc['lots_to_buy'] < 1).any()
+        return vc
+
     @property
     def best_combination(self):
         """Лучшие комбинации для торговли.
@@ -109,7 +140,9 @@ class Optimizer:
         rez = rez.sort_values(["RISK_CON", "R_DIFF"], ascending=[True, False])
         rez = rez.drop_duplicates("SELL")
         rez.index = pd.RangeIndex(start=1, stop=len(rez) + 1)
-        rez.to_excel(f'portfolio/reports/rec_ops_{str(datetime.today())[:10]}.xlsx')
+
+        vc = self._calculate_lots(rez)
+        save_to_excel(f'portfolio/reports/rec_ops_{str(datetime.today())[:10]}.xlsx', {'options': rez, 'lots_to_buy': vc})
         return rez
 
     def _wilcoxon_tests(self) -> Tuple[str, str, float, float]:

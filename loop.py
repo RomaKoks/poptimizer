@@ -38,5 +38,5 @@ if __name__ == '__main__':
 
     if time_thresh <= datetime.today().hour < time_thresh + 2:
         opt()
-        shut_down = ["shutdown", "-f", "-s", "-t", "30"]
-        subprocess.call(shut_down)
+        # shut_down = ["shutdown", "-f", "-s", "-t", "30"]
+        # subprocess.call(shut_down)
