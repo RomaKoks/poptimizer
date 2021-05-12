@@ -3,12 +3,13 @@ from typing import Optional
 
 import pandas as pd
 
+from poptimizer.data.views import listing
 from poptimizer.dl import ModelError
 from poptimizer.evolve import population
-from poptimizer.portfolio.portfolio import Portfolio
+from poptimizer.portfolio.portfolio import load_from_yaml
 
 # Максимальная популяция
-MAX_POPULATION = 90
+MAX_POPULATION = 80
 
 # Понижение масштаба разницы между родителями
 SCALE_DOWN = 0.9
@@ -33,19 +34,26 @@ class Evolution:
         """Сохраняет предельный размер популяции."""
         self._max_population = max_population
 
-    def evolve(self, portfolio: Portfolio) -> None:
+    def evolve(self) -> None:
         """Осуществляет эволюции.
 
         При необходимости создается начальная популяция из организмов по умолчанию.
         """
         self._setup()
 
-        tickers = tuple(portfolio.index[:-2])
-        end = portfolio.date
+        end = listing.last_history_date()
+        port = load_from_yaml(end)
+        tickers = tuple(port.index[:-2])
         scale = 1.0
         step = 0
 
         while True:
+
+            if (new_end := listing.last_history_date()) != end:
+                end = new_end
+                scale = 1.0
+                step = 0
+
             step += 1
             print(f"***{end.date()}: Шаг эволюции — {step}***")
             population.print_stat()
