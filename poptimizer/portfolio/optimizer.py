@@ -4,6 +4,7 @@ from datetime import datetime
 
 from typing import Tuple
 
+import numpy as np
 import pandas as pd
 from scipy import stats
 
@@ -34,12 +35,9 @@ def save_to_excel(filename, dfs):
     writer.save()
 
 
-
-
-
-
 class Optimizer:
     """Предлагает сделки для улучшения метрики портфеля."""
+
     def __init__(self, portfolio: Portfolio, p_value: float = P_VALUE):
         """Учитывается градиент, его ошибку и ликвидность бумаг.
 
@@ -103,19 +101,24 @@ class Optimizer:
         positions = len(self.portfolio.shares) - 2
         return positions_to_sell * positions - positions_to_sell + 1
 
-    def _calculate_lots(self, rez):
-        vc = None
-        banned = set()
-        zero_lots_exists = False
-        while vc is None or zero_lots_exists:
-            if zero_lots_exists:
-                banned.add(vc.loc[vc['lots_to_buy'] < 1].index[-1])
-            vc = rez.loc[~(rez['BUY'].isin(banned)), 'BUY'].value_counts(normalize=True).to_frame(name='proportion')
-            vc['APRX_SUM'] = vc['proportion'] * min(self.portfolio.value['CASH'], 50000)
-            vc['lot_price'] = self.portfolio.lot_size.loc[vc.index] * self.portfolio.price.loc[vc.index]
-            vc['lots_to_buy'] = vc['APRX_SUM'] / vc['lot_price']
-            zero_lots_exists = (vc['lots_to_buy'] < 1).any()
-        return vc
+    def _calculate_lots_to_buy_sell(self, rez, cash_threshold=50_000):
+        recomendations = {}
+        for action in ['BUY', 'SELL']:
+            zero_lots_exists = True
+            banned = set()
+            while zero_lots_exists:
+                temp = rez.loc[~(rez[action].isin(banned))].copy()
+                temp['inv_pos'] = np.linspace(1, 0, endpoint=False, num=temp.shape[0])
+                rec = (temp.groupby(action)['inv_pos'].sum() / temp['inv_pos'].sum()).to_frame(name='proportion')
+                rec['lot_price'] = self.portfolio.lot_size.loc[rec.index] * self.portfolio.price.loc[rec.index]
+                rec['SUM'] = rec['proportion'] * min(self.portfolio.value['CASH'], cash_threshold)
+                rec['lots'] = (rec['SUM'] / rec['lot_price']).round().astype(int)
+                rec['SUM'] = rec['lots'] * rec['lot_price']
+                zero_lots_exists = (rec['lots'] < 1).any()
+                rec.sort_values('proportion', inplace=True, ascending=False)
+                banned.add(rec.index[-1])
+            recomendations[action] = rec
+        return recomendations
 
     @property
     def best_combination(self):
@@ -138,11 +141,12 @@ class Optimizer:
             ],
         )
         rez = rez.sort_values(["RISK_CON", "R_DIFF"], ascending=[True, False])
+        lots = self._calculate_lots_to_buy_sell(rez)
         rez = rez.drop_duplicates("SELL")
         rez.index = pd.RangeIndex(start=1, stop=len(rez) + 1)
 
-        vc = self._calculate_lots(rez)
-        save_to_excel(f'portfolio/reports/rec_ops_{str(datetime.today())[:10]}.xlsx', {'options': rez, 'lots_to_buy': vc})
+        save_to_excel(f'portfolio/reports/rec_ops_{str(datetime.today())[:10]}.xlsx',
+                      {'options': rez, 'lots_to_buy': lots['BUY'], 'lots_to_sell': lots['SELL']})
         return rez
 
     def _wilcoxon_tests(self) -> Tuple[str, str, float, float]:
