@@ -30,7 +30,7 @@ def save_to_excel(filename, dfs):
         worksheet = writer.sheets[sheetname]  # pull worksheet object
         for idx, col in enumerate(df.columns):  # loop through all columns
             series = df[col]
-            max_len = series.astype(str).map(len).max() + 1
+            max_len = max(len(col), series.astype(str).map(len).max()) + 1
             worksheet.set_column(idx + 1, idx + 1, max_len)  # set column width
     writer.save()
 
@@ -101,21 +101,35 @@ class Optimizer:
         positions = len(self.portfolio.shares) - 2
         return positions_to_sell * positions - positions_to_sell + 1
 
-    def _calculate_lots_to_buy_sell(self, rez, cash_threshold=50_000):
+    def _calculate_lots_to_buy_sell(self, rez):
         recomendations = {}
+        cash_threshold = self.portfolio.value['PORTFOLIO'] * MAX_TRADE
+        # cash_threshold = min(self.portfolio.value['CASH'], cash_threshold)
         for action in ['BUY', 'SELL']:
-            zero_lots_exists = True
             banned = set()
+            zero_lots_exists = True
+            rec = None
             while zero_lots_exists:
                 temp = rez.loc[~(rez[action].isin(banned))].copy()
+                # создаём столбец отражающий удалённость строки от начала,
+                # в предположении о том, что в начале списка наиболее приоритетные операции
                 temp['inv_pos'] = np.linspace(1, 0, endpoint=False, num=temp.shape[0])
+                # преобразуем его в пропорцию от общего бюджета
                 rec = (temp.groupby(action)['inv_pos'].sum() / temp['inv_pos'].sum()).to_frame(name='proportion')
                 rec['lot_price'] = self.portfolio.lot_size.loc[rec.index] * self.portfolio.price.loc[rec.index]
-                rec['SUM'] = rec['proportion'] * min(self.portfolio.value['CASH'], cash_threshold)
+                # вычисляем по пропорции конкретную сумму по тикеру
+                rec['SUM'] = rec['proportion'] * cash_threshold
+                # считаем ближацшее к ней целое количество лотов
                 rec['lots'] = (rec['SUM'] / rec['lot_price']).round().astype(int)
+                # корректируем сумму учитывая целое количество лотов
                 rec['SUM'] = rec['lots'] * rec['lot_price']
+                # проверяем есть ли тикеры с 0м количеством лотов и последовательно добавляем в бан тикеры
+                # начиная с конца, то есть с те, у которых меньшая пропорция, до тех пор, пока не останутся
+                # только тикеры с ненулевым количеством лотов.
                 zero_lots_exists = (rec['lots'] < 1).any()
                 rec.sort_values('proportion', inplace=True, ascending=False)
+                if rec.shape[0] <= 1:
+                    break
                 banned.add(rec.index[-1])
             recomendations[action] = rec
         return recomendations
