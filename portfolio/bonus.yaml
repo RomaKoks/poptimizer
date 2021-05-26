@@ -4,7 +4,7 @@ positions:
   OGKB: 0
   MGNT: 0
   PLZL: 0
-  KZOS: 0
+#  KZOS: 0
   TRMK: 0
   TRNFP: 0
 #  LNZLP: 0
@@ -42,7 +42,7 @@ positions:
   MGTSP: 0
   GAZP: 0
   SIBN: 0
-  NKNC: 0
+#  NKNC: 0
   LKOH: 0
   NLMK: 0
   TTLK: 0
@@ -50,7 +50,7 @@ positions:
   BISVP: 0
   UPRO: 0
   RTKMP: 0
-  NKNCP: 0
+#  NKNCP: 0
   LSRG: 0
   LSNGP: 0
   AKRN: 0
