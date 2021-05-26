@@ -4,9 +4,9 @@ from datetime import datetime
 
 from typing import Tuple
 
-import numpy as np
 import pandas as pd
 from scipy import stats
+from sklearn.preprocessing import quantile_transform
 
 from poptimizer import config
 from poptimizer.config import MAX_TRADE
@@ -111,18 +111,13 @@ class Optimizer:
             rec = None
             while zero_lots_exists:
                 temp = rez.loc[~(rez[action].isin(banned))].copy()
-                # создаём столбец отражающий удалённость строки от начала,
-                # в предположении о том, что в начале списка наиболее приоритетные операции
-                temp['inv_pos'] = np.linspace(1, 0, endpoint=False, num=temp.shape[0])
-                # преобразуем его в пропорцию от общего бюджета
-                rec = (temp.groupby(action)['inv_pos'].sum() / temp['inv_pos'].sum()).to_frame(name='proportion')
-                rec['lot_price'] = self.portfolio.lot_size.loc[rec.index] * self.portfolio.price.loc[rec.index]
+                # преобразуем Q_H_MEAN в пропорцию от общего бюджета
+                rec = (temp.groupby(action)['Q_H_MEAN'].sum() / temp['Q_H_MEAN'].sum()).to_frame(name='proportion')
+                rec['lot_price'] = (self.portfolio.lot_size.loc[rec.index] * self.portfolio.price.loc[rec.index]).round(2)
                 # вычисляем по пропорции конкретную сумму по тикеру
                 rec['SUM'] = rec['proportion'] * cash_threshold
                 # считаем ближацшее к ней целое количество лотов
                 rec['lots'] = (rec['SUM'] / rec['lot_price']).round().astype(int)
-                # корректируем сумму учитывая целое количество лотов
-                rec['SUM'] = rec['lots'] * rec['lot_price']
                 # проверяем есть ли тикеры с 0м количеством лотов и последовательно добавляем в бан тикеры
                 # начиная с конца, то есть с те, у которых меньшая пропорция, до тех пор, пока не останутся
                 # только тикеры с ненулевым количеством лотов.
@@ -131,6 +126,11 @@ class Optimizer:
                 if rec.shape[0] <= 1:
                     break
                 banned.add(rec.index[-1])
+            # корректируем сумму учитывая целое количество лотов
+            rec['SUM'] = (rec['lots'] * rec['lot_price']).round(2)
+            rec['proportion'] = rec['proportion'].round(3)
+            rec['SHARES'] = rec['lots'] * self.portfolio.lot_size.loc[rec.index]
+            rec = rec[['lot_price', 'lots', 'SHARES', 'SUM', 'proportion']]
             recomendations[action] = rec
         return recomendations
 
@@ -154,13 +154,17 @@ class Optimizer:
                 "P_VALUE",
             ],
         )
-        rez = rez.sort_values(["RISK_CON", "R_DIFF"], ascending=[True, False])
+
+        tmp = rez[['R_DIFF', 'RISK_CON']].copy()
+        tmp['RISK_CON'] *= -1                                             # Так как чем выше риск - тем хуже
+        rez['Q_H_MEAN'] = stats.hmean(quantile_transform(tmp), axis=1)    # гармоническое среднее квантилей (аналог F1)
+        rez.sort_values(["Q_H_MEAN"], ascending=[False], inplace=True)
         lots = self._calculate_lots_to_buy_sell(rez)
-        rez = rez.drop_duplicates("SELL")
         rez.index = pd.RangeIndex(start=1, stop=len(rez) + 1)
 
         save_to_excel(f'portfolio/reports/rec_ops_{str(datetime.today())[:10]}.xlsx',
                       {'options': rez, 'lots_to_buy': lots['BUY'], 'lots_to_sell': lots['SELL']})
+        rez = rez.drop_duplicates("SELL")
         return rez
 
     def _wilcoxon_tests(self) -> Tuple[str, str, float, float]:
