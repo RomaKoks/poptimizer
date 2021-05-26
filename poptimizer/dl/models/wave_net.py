@@ -1,12 +1,14 @@
 """Модель на основе WaveNet."""
-from typing import Dict, List, Tuple, Union
+from typing import Union
 
 import numpy as np
 import torch
-from torch import nn
+from torch import distributions, nn
 
 from poptimizer.config import DEVICE
 from poptimizer.dl.features import FeatureType
+
+EPS = torch.tensor(torch.finfo().eps)
 
 
 class SubBlock(nn.Module):
@@ -149,7 +151,7 @@ class WaveNet(nn.Module):
     def __init__(
         self,
         history_days: int,
-        features_description: Dict[str, Tuple[FeatureType, int]],
+        features_description: dict[str, tuple[FeatureType, int]],
         start_bn: bool,
         sub_blocks: int,
         kernels: int,
@@ -157,6 +159,7 @@ class WaveNet(nn.Module):
         residual_channels: int,
         skip_channels: int,
         end_channels: int,
+        mixture_size: int,
     ) -> None:
         """
         :param history_days:
@@ -177,6 +180,10 @@ class WaveNet(nn.Module):
             Количество каналов у скипа.
         :param end_channels:
             Количество каналов, до которого сжимаются скипы перед расчетом финальных значений.
+        :param mixture_size:
+            Количество распределений в смеси. Для каждого распределения формируется три значения —
+            логарифм веса для вероятности, прокси для центрального положения и положительное прокси
+            для масштаба.
         """
         super().__init__()
 
@@ -228,13 +235,27 @@ class WaveNet(nn.Module):
         )
 
         self.end_conv = nn.Conv1d(in_channels=skip_channels, out_channels=end_channels, kernel_size=1)
-        self.output_conv_m = nn.Conv1d(in_channels=end_channels, out_channels=1, kernel_size=1)
-        self.output_conv_s = nn.Conv1d(in_channels=end_channels, out_channels=1, kernel_size=1)
+
+        self.output_conv_logits = nn.Conv1d(
+            in_channels=end_channels,
+            out_channels=mixture_size,
+            kernel_size=1,
+        )
+        self.output_conv_m = nn.Conv1d(
+            in_channels=end_channels,
+            out_channels=mixture_size,
+            kernel_size=1,
+        )
+        self.output_conv_s = nn.Conv1d(
+            in_channels=end_channels,
+            out_channels=mixture_size,
+            kernel_size=1,
+        )
         self.output_softplus_s = nn.Softplus()
 
     def forward(
-        self, batch: Dict[str, Union[torch.Tensor, List[torch.Tensor]]]
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        self, batch: dict[str, Union[torch.Tensor, list[torch.Tensor]]]
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """
         ->sequence-+
         ->........-+
@@ -280,9 +301,21 @@ class WaveNet(nn.Module):
         y = self.end_conv(y)
         y = torch.relu(y)
 
+        logits = self.output_conv_logits(y)
+
         m = self.output_conv_m(y)
 
         s = self.output_conv_s(y)
-        s = self.output_softplus_s(s)
+        s = self.output_softplus_s(s) + EPS
 
-        return m.squeeze(dim=-1), s.squeeze(dim=-1)
+        return logits.permute((0, 2, 1)), m.permute((0, 2, 1)), s.permute((0, 2, 1))
+
+    def dist(
+        self, batch: dict[str, Union[torch.Tensor, list[torch.Tensor]]]
+    ) -> distributions.Distribution:
+        logits, mean, std = self(batch)
+
+        weights_dist = distributions.Categorical(logits=logits)
+        comp_dist = distributions.LogNormal(mean, std)
+
+        return distributions.MixtureSameFamily(weights_dist, comp_dist)

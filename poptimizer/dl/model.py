@@ -51,15 +51,15 @@ class DegeneratedModelError(ModelError):
     """В модели отключены все признаки."""
 
 
-def log_normal_llh(
-    output: tuple[torch.Tensor, torch.Tensor],
+def log_normal_llh_mix(
+    model: nn.Module,
     batch: dict[str, torch.Tensor],
 ) -> tuple[torch.Tensor, int, torch.Tensor]:
     """Minus Normal Log Likelihood and batch size."""
-    mean, std = output
-    dist = torch.distributions.log_normal.LogNormal(mean, std)
+    dist = model.dist(batch)
     llh = dist.log_prob(batch["Label"] + torch.tensor(1.0))
-    return -llh.sum(), mean.shape[0], llh
+
+    return -llh.sum(), llh.shape[0], llh
 
 
 class Model:
@@ -145,7 +145,7 @@ class Model:
 
         model = self.prepare_model(loader)
         model.to(DEVICE)
-        loss_fn = log_normal_llh
+        loss_fn = log_normal_llh_mix
 
         llh_sum = 0
         weight_sum = 0
@@ -157,8 +157,7 @@ class Model:
             model.eval()
             bars = tqdm.tqdm(loader, file=sys.stdout, desc="~~> Test")
             for batch in bars:
-                mean, std = model(batch)
-                loss, weight, llh = loss_fn((mean, std), batch)
+                loss, weight, llh = loss_fn(model, batch)
                 llh_sum -= loss.item()
                 weight_sum += weight
                 llh_all.append(llh)
@@ -234,7 +233,7 @@ class Model:
         llh_deque = collections.deque([0], maxlen=steps_per_epoch)
         weight_sum = 0
         weight_deque = collections.deque([0], maxlen=steps_per_epoch)
-        loss_fn = log_normal_llh
+        loss_fn = log_normal_llh_mix
 
         loader = itertools.repeat(loader)
         loader = itertools.chain.from_iterable(loader)
@@ -245,9 +244,8 @@ class Model:
         llh_min = None
         for batch in bars:
             optimizer.zero_grad()
-            output = model(batch)
 
-            loss, weight, _ = loss_fn(output, batch)
+            loss, weight, _ = loss_fn(model, batch)
 
             llh_sum += -loss.item() - llh_deque[0]
             llh_deque.append(-loss.item())
@@ -287,10 +285,11 @@ class Model:
         with torch.no_grad():
             model.eval()
             for batch in loader:
-                mean, std = model(batch)
-                dist = torch.distributions.log_normal.LogNormal(mean, std)
+                dist = model.dist(batch)
+
                 means.append(dist.mean - torch.tensor(1.0))
                 stds.append(dist.variance ** 0.5)
+
         means = torch.cat(means, dim=0).cpu().numpy().flatten()
         stds = torch.cat(stds, dim=0).cpu().numpy().flatten()
 
