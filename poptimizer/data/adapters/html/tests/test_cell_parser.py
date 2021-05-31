@@ -18,6 +18,9 @@ def test_date_parser_us():
     """Парсер для дат в американском формате."""
     assert cell_parser.date_us("-") is None
     assert cell_parser.date_us("07/10/2019") == datetime(2019, 7, 10)
+    assert cell_parser.date_us("12/9/2020") == datetime(2020, 12, 9)
+    assert cell_parser.date_us("6/10/2020") == datetime(2020, 6, 10)
+    assert cell_parser.date_us("3/8/2017") == datetime(2017, 3, 8)
 
 
 def test_div_parser():
@@ -39,4 +42,6 @@ def test_div_parser_with_cur():
     """Преобразование наименования валюты."""
     assert cell_parser.div_with_cur("2 027,5  ₽") == "2027.5RUR"
     assert cell_parser.div_with_cur("2,1  $") == "2.1USD"
+    assert cell_parser.div_with_cur("2,1 $") == "2.1USD"
+    assert cell_parser.div_with_cur("2,1$") == "2.1USD"
     assert cell_parser.div_with_cur("") is None
