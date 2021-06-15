@@ -20,7 +20,7 @@ DEVICE = torch.device("cpu") # "cuda" if torch.cuda.is_available() else
 
 # Количество колонок в распечатках без переноса на несколько страниц
 pd.set_option("display.max_columns", 20)
-pd.set_option("display.max_rows", 170)
+pd.set_option("display.max_rows", 180)
 pd.set_option("display.width", None)
 
 # Путь к директории с отчетами
@@ -39,4 +39,4 @@ MAX_TRADE = 1 / 100
 MAX_POPULATION = 60
 
 # Длинна прогноза в торговых днях
-FORECAST_DAYS = 30
+FORECAST_DAYS = 31
