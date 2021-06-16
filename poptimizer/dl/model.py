@@ -166,8 +166,8 @@ class Model:
 
                 bars.set_postfix_str(f"{llh_sum / weight_sum:.5f}")
 
-        all_means = torch.cat(all_means).numpy().flatten()
-        all_labels = torch.cat(all_labels).numpy().flatten()
+        all_means = torch.cat(all_means).cpu().numpy().flatten()
+        all_labels = torch.cat(all_labels).cpu().numpy().flatten()
 
         forecast_sorted_labels = pd.DataFrame(all_labels, index=all_means).sort_index()
         forecast_sorted_labels = (
