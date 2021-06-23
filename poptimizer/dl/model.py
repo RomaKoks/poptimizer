@@ -5,9 +5,11 @@ import itertools
 import sys
 from typing import Optional
 
+import numpy as np
 import pandas as pd
 import torch
 import tqdm
+from numpy import linalg
 from scipy import stats
 from torch import nn, optim
 
@@ -60,7 +62,7 @@ def log_normal_llh_mix(
     dist = model.dist(batch)
     llh = dist.log_prob(batch["Label"] + torch.tensor(1.0))
 
-    return -llh.sum(), dist.mean - torch.tensor(1.0)
+    return -llh.sum(), dist.mean - torch.tensor(1.0), dist.variance
 
 
 class Model:
@@ -151,6 +153,7 @@ class Model:
         llh_sum = 0
         weight_sum = 0
         all_means = []
+        all_vars = []
         all_labels = []
 
         print(f"Тестовых дней: {days}")
@@ -159,32 +162,21 @@ class Model:
             model.eval()
             bars = tqdm.tqdm(loader, file=sys.stdout, desc="~~> Test")
             for batch in bars:
-                loss, mean = loss_fn(model, batch)
+                loss, mean, var = loss_fn(model, batch)
                 llh_sum -= loss.item()
                 weight_sum += mean.shape[0]
                 all_means.append(mean)
+                all_vars.append(var)
                 all_labels.append(batch["Label"])
 
                 bars.set_postfix_str(f"{llh_sum / weight_sum:.5f}")
 
         all_means = torch.cat(all_means).cpu().numpy().flatten()
+        all_vars = torch.cat(all_vars).cpu().numpy().flatten()
         all_labels = torch.cat(all_labels).cpu().numpy().flatten()
+        _opt_weights(all_means, all_vars, all_labels)
 
-        sorted_labels = pd.DataFrame(all_labels, index=all_means).sort_index(ascending=False)
-        sorted_labels = sorted_labels * YEAR_IN_TRADING_DAYS / data_params.FORECAST_DAYS
-
-        tau, p_value = stats.kendalltau(all_means, all_labels)
-        print(f"AUC = {(tau + 1) / 2:.2%}, p = {p_value:.2%}")
-
-        n_half = len(sorted_labels) // 2
-
-        best = sorted_labels.iloc[:n_half].values.mean()
-        all_shares = sorted_labels.values.mean()
-
-        print(f"Best - {best:.4f}")
-        print(f"All  - {all_shares:.4f}")
-
-        return float(best - all_shares)
+        return llh_sum / weight_sum
 
     def _load_trained_model(
         self,
@@ -262,7 +254,7 @@ class Model:
         for batch in bars:
             optimizer.zero_grad()
 
-            loss, means = loss_fn(model, batch)
+            loss, means, _ = loss_fn(model, batch)
 
             llh_sum += -loss.item() - llh_deque[0]
             llh_deque.append(-loss.item())
@@ -323,3 +315,18 @@ class Model:
             mean=means,
             std=stds,
         )
+
+
+def opt_weight(mean: np.array, var: np.array):
+    precision = linalg.inv(np.diag(var))
+    weighted_mean = precision @ mean.reshape(-1, 1)
+    lambda_ = weighted_mean.sum() / precision.sum()
+    optimal_weights = precision @ (mean.reshape(-1, 1) - lambda_)
+    return optimal_weights.ravel()
+
+
+def _opt_weights(mean: np.array, var: np.array, labels: np.array) -> None:
+    n = len(mean)
+    rez = stats.ttest_1samp(opt_weight(mean, var) * labels, 0, alternative="greater")
+    print(rez)
+    print(rez[0] / n ** 0.5 * (YEAR_IN_TRADING_DAYS / data_params.FORECAST_DAYS) ** 0.5)
