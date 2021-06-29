@@ -62,6 +62,11 @@ class Organism:
         """LLH OOS."""
         return self._doc.llh
 
+    @property
+    def ir(self) -> float:
+        """Information ratio."""
+        return self._doc.ir
+
     def evaluate_fitness(self, tickers: tuple[str, ...], end: pd.Timestamp) -> float:
         """Вычисляет качество организма.
 
@@ -75,10 +80,11 @@ class Organism:
 
         timer = time.monotonic_ns()
         model = Model(tuple(tickers), end, self.genotype.get_phenotype())
-        llh = model.llh
+        llh, ir = model.quality_metrics
         timer = time.monotonic_ns() - timer
 
         doc.llh = llh
+        doc.ir = ir
         doc.model = bytes(model)
         doc.date = end
         doc.tickers = tickers
@@ -213,24 +219,25 @@ def get_all_organisms() -> Iterable[Organism]:
 
 def print_stat() -> None:
     """Статистика — минимальное и максимальное значение коэффициента Шарпа."""
-    _print_llh_stats()
+    _print_key_stats("llh")
+    _print_key_stats("ir")
     _print_wins_stats()
 
 
-def _print_llh_stats() -> None:
+def _print_key_stats(key: str) -> None:
     """Статистика по минимуму, медиане и максимуму llh."""
     collection = store.get_collection()
     db_find = collection.find
-    cursor = db_find(filter={"llh": {"$exists": True}}, projection=["llh"])
-    llhs = map(lambda doc: doc["llh"], cursor)
-    llhs = tuple(llhs)
-    if llhs:
-        quantiles = np.quantile(tuple(llhs), [0, 0.5, 1.0])
+    cursor = db_find(filter={key: {"$exists": True}}, projection=[key])
+    keys = map(lambda doc: doc[key], cursor)
+    keys = tuple(keys)
+    if keys:
+        quantiles = np.quantile(tuple(keys), [0, 0.5, 1.0])
         quantiles = map(lambda quantile: f"{quantile:.4f}", quantiles)
         quantiles = tuple(quantiles)
     else:
         quantiles = ["-" for _ in range(3)]
-    print(f"LLH - ({', '.join(tuple(quantiles))})")
+    print(f"{key.upper()} - ({', '.join(tuple(quantiles))})")
 
 
 def _print_wins_stats() -> None:
