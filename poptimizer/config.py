@@ -20,7 +20,7 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu") #
 
 # Количество колонок в распечатках без переноса на несколько страниц
 pd.set_option("display.max_columns", 20)
-pd.set_option("display.max_rows", 180)
+pd.set_option("display.max_rows", None)
 pd.set_option("display.width", None)
 
 # Путь к директории с отчетами
@@ -33,7 +33,7 @@ PORT_PATH = pathlib.Path(__file__).parents[1] / "portfolio"
 YEAR_IN_TRADING_DAYS = 12 * 21
 
 # Ограничение на размер оборота — используется для предложения новых бумаг для анализа
-MAX_TRADE = 1 / 130
+MAX_TRADE = 1 / 150
 
 # Максимальная популяция
 MAX_POPULATION = 60

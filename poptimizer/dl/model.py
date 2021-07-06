@@ -158,6 +158,7 @@ class Model:
 
         print(f"Тестовых дней: {days}")
         print(f"Тестовых примеров: {len(loader.dataset)}")
+        llh_adj = np.log(data_params.FORECAST_DAYS) / 2
         with torch.no_grad():
             model.eval()
             bars = tqdm.tqdm(loader, file=sys.stdout, desc="~~> Test")
@@ -169,12 +170,12 @@ class Model:
                 all_vars.append(var)
                 all_labels.append(batch["Label"])
 
-                bars.set_postfix_str(f"{llh_sum / weight_sum:.5f}")
+                bars.set_postfix_str(f"{llh_sum / weight_sum + llh_adj:.5f}")
 
         all_means = torch.cat(all_means).cpu().numpy().flatten()
         all_vars = torch.cat(all_vars).cpu().numpy().flatten()
         all_labels = torch.cat(all_labels).cpu().numpy().flatten()
-        llh = llh_sum / weight_sum
+        llh = llh_sum / weight_sum + llh_adj
         ir = _opt_port(all_means, all_vars, all_labels)
         print(f"LLH:   {llh:.4f}")
 
@@ -253,6 +254,7 @@ class Model:
         model.train()
         bars = tqdm.tqdm(loader, file=sys.stdout, total=total_steps, desc="~~> Train")
         llh_min = None
+        llh_adj = np.log(data_params.FORECAST_DAYS) / 2
         for batch in bars:
             optimizer.zero_grad()
 
@@ -268,7 +270,7 @@ class Model:
             optimizer.step()
             scheduler.step()
 
-            llh = llh_sum / weight_sum
+            llh = llh_sum / weight_sum + llh_adj
             bars.set_postfix_str(f"{llh:.5f}")
 
             if llh_min is None:

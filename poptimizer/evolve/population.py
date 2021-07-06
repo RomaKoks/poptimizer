@@ -1,4 +1,5 @@
 """Класс организма и операции с популяцией организмов."""
+import contextlib
 import time
 from typing import Iterable, Optional
 
@@ -7,13 +8,13 @@ import numpy as np
 import pandas as pd
 import pymongo
 
-from poptimizer.config import POptimizerError
+from poptimizer import config
 from poptimizer.dl import Forecast, Model
 from poptimizer.evolve import store
 from poptimizer.evolve.genotype import Genotype
 
 
-class ForecastError(POptimizerError):
+class ForecastError(config.POptimizerError):
     """Отсутствующий прогноз."""
 
 
@@ -32,10 +33,31 @@ class Organism:
     ) -> None:
         """Загружает организм из базы данных."""
         self._doc = store.Doc(id_=_id, genotype=genotype)
+        # TODO: временно — убрать после преобразования всех значений
+        if isinstance(self._doc.llh, float):
+            self._doc.llh = [self._doc.llh + np.log(config.FORECAST_DAYS) / 2]
 
     def __str__(self) -> str:
         """Текстовое представление генотипа организма."""
-        return str(self._doc.genotype)
+        llh_block = -np.inf
+        if self.scores > 0:
+            llh_all = [f"{llh:.4f}" for llh in self.llh]
+            llh_all = ", ".join(llh_all)
+
+            llh = np.array(self.llh).mean()
+
+            llh_block = f"{llh:0.4f}: {llh_all}"
+
+        seconds = self.timer
+
+        blocks = [
+            f"LLH — {llh_block}",
+            f"IR — {self.ir:0.4f}",
+            f"Timer — {seconds}",
+            str(self._doc.genotype),
+        ]
+
+        return "\n".join(blocks)
 
     @property
     def id(self) -> bson.ObjectId:
@@ -50,16 +72,16 @@ class Organism:
     @property
     def timer(self) -> float:
         """Генотип организма."""
-        return self._doc.timer
+        return self._doc.timer // 10 ** 9
 
     @property
-    def wins(self) -> int:
-        """Количество побед."""
-        return self._doc.wins
+    def scores(self) -> int:
+        """Количество оценок LLH."""
+        return len(self.llh)
 
     @property
-    def llh(self) -> float:
-        """LLH OOS."""
+    def llh(self) -> list[float]:
+        """List of LLH OOS."""
         return self._doc.llh
 
     @property
@@ -67,64 +89,38 @@ class Organism:
         """Information ratio."""
         return self._doc.ir
 
-    def evaluate_fitness(self, tickers: tuple[str, ...], end: pd.Timestamp) -> float:
+    def evaluate_fitness(self, tickers: tuple[str, ...], end: pd.Timestamp) -> list[float]:
         """Вычисляет качество организма.
 
-        Если осуществлялась оценка для указанных тикеров и даты - используется сохраненное значение. Если
-        существует натренированная модель для указанных тикеров - осуществляется оценка без тренировки.
-        В ином случае тренируется и оценивается с нуля.
+        В первый вызов для нового дня используется метрика существующей натренированной модели.
+        При последующих вызовах в течение дня происходит обучение с нуля.
         """
         tickers = list(tickers)
         doc = self._doc
-        doc.wins += 1
+
+        pickled_model = None
+        if doc.date is not None and doc.date < end and tickers == doc.tickers:
+            pickled_model = doc.model
 
         timer = time.monotonic_ns()
-        model = Model(tuple(tickers), end, self.genotype.get_phenotype())
+        model = Model(tuple(tickers), end, self.genotype.get_phenotype(), pickled_model)
         llh, ir = model.quality_metrics
-        timer = time.monotonic_ns() - timer
 
-        doc.llh = llh
+        if pickled_model is None:
+            doc.timer = time.monotonic_ns() - timer
+
+        doc.llh = [llh] + doc.llh
+        doc.wins = len(doc.llh)
         doc.ir = ir
+
         doc.model = bytes(model)
+
         doc.date = end
         doc.tickers = tickers
 
-        doc.timer = timer
-
         doc.save()
-        return llh
 
-    def find_weaker(self) -> "Organism":
-        """Находит организм с наименьшим llh.
-
-        Ищет самых медленных среди более старых и более слабых.
-        Если более старых и слабых нет, то ищет более слабых.
-        Может найти самого себя.
-
-        Таким образом, пока не пройден один цикл размножения с новыми данными эволюционный процесс
-        старается истреблять медленные организмы. Если за грубо сутки удается перетренировать все
-        организмы, то можно искать самые хорошие, не обращая внимание на скорость.
-        """
-        doc = self._doc
-        collection = store.get_collection()
-
-        filter_ = {"llh": {"$lt": doc.llh}, "date": {"$lt": doc.date}, "timer": {"$gt": doc.timer}}
-        id_dict = collection.find_one(
-            filter=filter_,
-            projection=["_id"],
-            sort=[("timer", pymongo.DESCENDING)],
-        )
-        if id_dict is not None:
-            org = Organism(**id_dict)
-            return org
-
-        filter_ = {}
-        id_dict = collection.find_one(
-            filter=filter_,
-            projection=["_id"],
-            sort=[("llh", pymongo.ASCENDING)],
-        )
-        return Organism(**id_dict)
+        return self.llh
 
     def die(self) -> None:
         """Организм удаляется из популяции."""
@@ -189,17 +185,50 @@ def get_random_organism() -> Organism:
 
 
 def get_parent() -> Organism:
-    """Получить лучший из популяции."""
+    """Родитель отбирается по трем критериям среди давно не оценивавшихся.
+
+    - Должен входить в лучшую половину по LLH
+    - Внутри этой половины входить в лучшую половину по IR
+    - Было затрачено минимальное время на обучение
+    """
+    n_llh = (config.MAX_POPULATION + 1) // 2
+    n_irr = (n_llh + 1) // 2
+
     collection = store.get_collection()
-    organism = collection.find_one(
-        filter={},
-        projection=["_id"],
-        sort=[
-            ("date", pymongo.ASCENDING),
-            ("llh", pymongo.DESCENDING),
-        ],
-    )
-    return Organism(**organism)
+    pipeline = [
+        {
+            "$project": {
+                "date": True,
+                "llh": {"$avg": "$llh"},
+                "ir": True,
+                "total": {"$multiply": ["$timer", "$wins"]},
+            },
+        },
+        {"$sort": {"date": pymongo.ASCENDING, "llh": pymongo.DESCENDING}},
+        {"$limit": n_llh},
+        {"$sort": {"date": pymongo.ASCENDING, "ir": pymongo.DESCENDING}},
+        {"$limit": n_irr},
+        {"$sort": {"date": pymongo.ASCENDING, "total": pymongo.ASCENDING}},
+        {"$limit": 1},
+        {"$project": {"_id": True}},
+    ]
+    doc = next(collection.aggregate(pipeline))
+
+    return Organism(**doc)
+
+
+def get_prey() -> Organism:
+    """Жертва — самый слабый по LLH среди давно не оценивавшихся."""
+    collection = store.get_collection()
+    pipeline = [
+        {"$project": {"date": True, "llh": {"$avg": "$llh"}}},
+        {"$sort": {"date": pymongo.ASCENDING, "llh": pymongo.ASCENDING}},
+        {"$limit": 1},
+        {"$project": {"_id": True}},
+    ]
+    doc = next(collection.aggregate(pipeline))
+
+    return Organism(**doc)
 
 
 def get_all_organisms() -> Iterable[Organism]:
@@ -211,10 +240,8 @@ def get_all_organisms() -> Iterable[Organism]:
         sort=[("date", pymongo.ASCENDING), ("llh", pymongo.DESCENDING)],
     )
     for id_dict in id_dicts:
-        try:
+        with contextlib.suppress(store.IdError):
             yield Organism(**id_dict)
-        except store.IdError:
-            pass
 
 
 def print_stat() -> None:
@@ -229,15 +256,24 @@ def _print_key_stats(key: str) -> None:
     collection = store.get_collection()
     db_find = collection.find
     cursor = db_find(filter={key: {"$exists": True}}, projection=[key])
+
     keys = map(lambda doc: doc[key], cursor)
+    keys = map(
+        lambda amount: amount if isinstance(amount, float) else np.array(amount).mean(),
+        keys,
+    )
     keys = tuple(keys)
+
     if keys:
-        quantiles = np.quantile(tuple(keys), [0, 0.5, 1.0])
+        quantiles = np.quantile(keys, [0, 0.5, 1.0])
         quantiles = map(lambda quantile: f"{quantile:.4f}", quantiles)
         quantiles = tuple(quantiles)
     else:
         quantiles = ["-" for _ in range(3)]
-    print(f"{key.upper()} - ({', '.join(tuple(quantiles))})")
+
+    quantiles = ", ".join(tuple(quantiles))
+
+    print(f"{key.upper()} - ({quantiles})")  # noqa: WPS421
 
 
 def _print_wins_stats() -> None:
@@ -255,4 +291,5 @@ def _print_wins_stats() -> None:
     if wins:
         max_wins, *_ = wins
         max_wins = max_wins["wins"]
-    print(f"Максимум побед - {max_wins}")
+
+    print(f"Максимум оценок - {max_wins}")  # noqa: WPS421
