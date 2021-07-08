@@ -119,15 +119,16 @@ class Optimizer:
                 "P_VALUE",
             ],
         )
-        tmp = rez[['SML_DIFF', 'R_DIFF']].copy()
-        rez['Q_H_MEAN'] = stats.hmean(quantile_transform(tmp), axis=1)    # гармоническое среднее квантилей (аналог F1)
-        rez.sort_values(["Q_H_MEAN"], ascending=[False], inplace=True)
-        lots = self._calculate_lots_to_buy_sell(rez)
+        if rez.shape[0] > 0:
+            tmp = rez[['SML_DIFF', 'R_DIFF']].copy()
+            rez['Q_H_MEAN'] = stats.hmean(quantile_transform(tmp), axis=1)    # гармоническое среднее квантилей (аналог F1)
+            rez.sort_values(["Q_H_MEAN"], ascending=[False], inplace=True)
+            lots = self._calculate_lots_to_buy_sell(rez)
 
-        save_to_excel(f'portfolio/reports/rec_ops_{str(datetime.today())[:10]}.xlsx',
-                      {'options': rez, 'lots_to_buy': lots['BUY'], 'lots_to_sell': lots['SELL']})
-        rez.sort_values(["SML_DIFF"], ascending=[False], inplace=True)
-        rez.index = pd.RangeIndex(start=1, stop=len(rez) + 1)
+            save_to_excel(f'portfolio/reports/rec_ops_{str(datetime.today())[:10]}.xlsx',
+                          {'options': rez, 'lots_to_buy': lots['BUY'], 'lots_to_sell': lots['SELL']})
+            rez.sort_values(["SML_DIFF"], ascending=[False], inplace=True)
+            rez.index = pd.RangeIndex(start=1, stop=len(rez) + 1)
         return rez
 
     def _acceptable_trades(self) -> tuple[str, str, float]:

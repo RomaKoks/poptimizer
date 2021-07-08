@@ -33,7 +33,7 @@ PORT_PATH = pathlib.Path(__file__).parents[1] / "portfolio"
 YEAR_IN_TRADING_DAYS = 12 * 21
 
 # Ограничение на размер оборота — используется для предложения новых бумаг для анализа
-MAX_TRADE = 1 / 150
+MAX_TRADE = 1 / 50
 
 # Максимальная популяция
 MAX_POPULATION = 60
